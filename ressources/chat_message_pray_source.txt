@@ -1,0 +1,7 @@
+"en-gb"
+group CHAT "<NUMERIC_BABLE_ID>20160928220229_chatmessage"
+"Sender UserID" "<NUMERIC_BABLE_ID>"
+"ChatID" "<CHAT_ID>"
+"Sender Nickname" "<GAME USER_OF_THIS_WORLD>"
+"Chat Message Type" "Message"
+"Chat Message" "<MESSAGE_CONTENT>"
