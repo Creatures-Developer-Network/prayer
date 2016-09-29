@@ -5,9 +5,9 @@ pray = prayer(argv[1])
 
 for block in pray.blocks:
     print("Block Type: %s\nBlock Name: %s" % (block['type'],block['name']))
-    if block['type'] == 'CHAT' or block['type'] == 'MESG':
+    if block['type'] in ['ICHT','IMSG','MESG','CHAT']:
         # write tag_block to Disk for analysis.
-        with open('ressources/%s.blk' % block['type'], 'wb') as f:
+        with open('resources/%s.blk' % block['type'], 'wb') as f:
             f.write(block['decompressed_data'])
 
         data = tag_block(block)
