@@ -1,0 +1,7 @@
+"en-gb"
+group MESG "<NUMERIC_BABLE_ID>20160929004234_message"
+"String Variable Name" "Content :D"
+"Integer Variable no 1" 47
+"Integer Variable no 2" 3
+"Integer Variable no 3" 23
+"Jet anotherString Variable" "LOREM IPSUM"

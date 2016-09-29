@@ -16,3 +16,9 @@ for block in pray.blocks:
                 print('  INT Key: "%s" Value: %s'% variable)
             elif type(variable[1]) == str:
                 print('  STR Key: "%s" Value: "%s"' % variable)
+        # generate tag_block based on a list of named variables originaly extracted from the decompressed data and
+        # compare it to the original tag_block
+        print(data.generate_tag_block(data.named_variables))
+        print(block['decompressed_data'])
+        if data.generate_tag_block(data.named_variables) == block['decompressed_data']:
+            print("MATCH!")

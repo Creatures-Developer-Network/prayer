@@ -16,7 +16,7 @@ class prayer:
             self.data = self.data[4:]
             self._extract_pray_blocks(self.data)
 
-        # THis funtion takes the data and parses out all the relevant Block informations, as well as the Blocks Data
+        # This funtion takes the data and parses out all the relevant Block informations, as well as the Blocks Data
 
     def _extract_pray_blocks(self, data):
         # The first 4 Byte contain the type of the Block
@@ -54,6 +54,9 @@ class prayer:
             self._extract_pray_blocks(data[144 + compressed_data_length:])
 
 
+
+
+
 class tag_block:
 
     # A tag block contains named String and Integer Variables.
@@ -64,10 +67,10 @@ class tag_block:
         self.named_variables = list()
         # Integers
         number_of_integers = int.from_bytes(self.mesg_data[:4], byteorder='little')
-        self.get_named_integer_variables(data=self.mesg_data[4:], count=number_of_integers)
+        self._get_named_integer_variables(data=self.mesg_data[4:], count=number_of_integers)
         # Strings
         number_of_strings = int.from_bytes(self.str_data[:4], byteorder='little')
-        self.get_named_string_variables(data=self.str_data[4:], count=number_of_strings)
+        self._get_named_string_variables(data=self.str_data[4:], count=number_of_strings)
 
 
     # Each named Integer Variable consists of 3 Parts:
@@ -75,13 +78,13 @@ class tag_block:
     # - n Bytes containing said Name, where n is the length specified in the Integer beforhand 'key'
     # - a 32bit Integer containing the 'value' of the Named Integer
 
-    def get_named_integer_variables(self, data, count):
+    def _get_named_integer_variables(self, data, count):
         if count != 0:
             key_length = int.from_bytes(data[:4], byteorder='little')
             key = data[4:4 + key_length].decode('utf-8')
             value = int.from_bytes(data[4 + key_length:8 + key_length], byteorder='little')
             self.named_variables.append((key, value))
-            self.get_named_integer_variables(data=data[8 + key_length:], count=count - 1)
+            self._get_named_integer_variables(data=data[8 + key_length:], count=count - 1)
         else:
             self.str_data = data
 
@@ -91,11 +94,35 @@ class tag_block:
     # - a 32bit Integer Variable that states the length of the value 'value_length'
     # - n Bytes containing said 'value', where n is the length specified in the Integer beforhand 'value_length'
 
-    def get_named_string_variables(self, data, count):
+    def _get_named_string_variables(self, data, count):
         if count != 0:
             key_length = int.from_bytes(data[:4], byteorder='little')
             key = data[4:4 + key_length].decode('utf-8')
             value_length = int.from_bytes(data[4 + key_length:8 + key_length], byteorder='little')
             value = data[8 + key_length:8 + key_length + value_length].decode('utf-8')
             self.named_variables.append((key, value))
-            self.get_named_string_variables(data=data[8 + key_length + value_length:], count=count - 1)
+            self._get_named_string_variables(data=data[8 + key_length + value_length:], count=count - 1)
+
+    @staticmethod
+    def generate_tag_block(named_variabe_list):
+        ints = list()
+        strings = list()
+        for variable in named_variabe_list:
+            if type(variable[1]) == int:
+                ints.append(variable)
+            elif type(variable[1] == str):
+                strings.append(variable)
+        tmp_ints = bytes(len(ints).to_bytes(length=4, byteorder='little'))
+        for variable in ints:
+            tmp_ints += (len(bytes(variable[0], encoding='utf-8')).to_bytes(length=4, byteorder='little'))
+            tmp_ints += bytes(variable[0], encoding='utf-8')
+            tmp_ints += variable[1].to_bytes(length=4, byteorder='little')
+        tmp_strings = bytes(len(strings).to_bytes(length=4,byteorder='little'))
+        for variable in strings:
+            tmp_strings += (len(bytes(variable[0], encoding='utf-8')).to_bytes(length=4, byteorder='little'))
+            tmp_strings += bytes(variable[0], encoding='utf-8')
+            tmp_strings += (len(bytes(variable[1], encoding='utf-8')).to_bytes(length=4, byteorder='little'))
+            tmp_strings += bytes(variable[1], encoding='utf-8')
+        return tmp_ints + tmp_strings
+
+
