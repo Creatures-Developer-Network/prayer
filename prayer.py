@@ -10,7 +10,7 @@ class prayer:
             self.data = bytearray(f.read())
             # Every PRAY File begins with 4 Bytes, containg the word 'PRAY' coded in ASCII)
             # if the File does not contain the Header, it is propably not a PRAY File!
-            if self.data[:4].decode('utf-8') != "PRAY":
+            if self.data[:4].decode('latin-1') != "PRAY":
                 raise TypeError('The given File "%s" is not a PRAY File! (PRAY Header is missing)' % file)
             # Strip of the PRAY Header and set the variable data to a Bytearray containing the Data.
             self.data = self.data[4:]
@@ -20,9 +20,9 @@ class prayer:
 
     def _extract_pray_blocks(self, data):
         # The first 4 Byte contain the type of the Block
-        pray_block_type = data[:4].decode('utf-8')
+        pray_block_type = data[:4].decode('latin-1')
         # the following 128 Byte, contain the Name of the Block (ASCII or UTF-8, i dont know) padded with 'NUL' '\0'
-        block_name = data[4:132].decode('utf-8').rstrip('\0')
+        block_name = data[4:132].decode('latin-1').rstrip('\0')
         # then there is a 32 bit Integer, that states the compressed size/length of the data
         compressed_data_length = int.from_bytes(data[132:136], byteorder='little', signed=False)
         # right after that, there is another 32 bit Integer that states the uncompressed size/length of the data
@@ -81,7 +81,7 @@ class tag_block:
     def _get_named_integer_variables(self, data, count):
         if count != 0:
             key_length = int.from_bytes(data[:4], byteorder='little')
-            key = data[4:4 + key_length].decode('utf-8')
+            key = data[4:4 + key_length].decode('latin-1')
             value = int.from_bytes(data[4 + key_length:8 + key_length], byteorder='little')
             self.named_variables.append((key, value))
             self._get_named_integer_variables(data=data[8 + key_length:], count=count - 1)
@@ -97,9 +97,9 @@ class tag_block:
     def _get_named_string_variables(self, data, count):
         if count != 0:
             key_length = int.from_bytes(data[:4], byteorder='little')
-            key = data[4:4 + key_length].decode('utf-8')
+            key = data[4:4 + key_length].decode('latin-1')
             value_length = int.from_bytes(data[4 + key_length:8 + key_length], byteorder='little')
-            value = data[8 + key_length:8 + key_length + value_length].decode('utf-8')
+            value = data[8 + key_length:8 + key_length + value_length].decode('latin-1')
             self.named_variables.append((key, value))
             self._get_named_string_variables(data=data[8 + key_length + value_length:], count=count - 1)
 
@@ -114,15 +114,15 @@ class tag_block:
                 strings.append(variable)
         tmp_ints = bytes(len(ints).to_bytes(length=4, byteorder='little'))
         for variable in ints:
-            tmp_ints += (len(bytes(variable[0], encoding='utf-8')).to_bytes(length=4, byteorder='little'))
-            tmp_ints += bytes(variable[0], encoding='utf-8')
+            tmp_ints += (len(bytes(variable[0], encoding='latin-1')).to_bytes(length=4, byteorder='little'))
+            tmp_ints += bytes(variable[0], encoding='latin-1')
             tmp_ints += variable[1].to_bytes(length=4, byteorder='little')
         tmp_strings = bytes(len(strings).to_bytes(length=4,byteorder='little'))
         for variable in strings:
-            tmp_strings += (len(bytes(variable[0], encoding='utf-8')).to_bytes(length=4, byteorder='little'))
-            tmp_strings += bytes(variable[0], encoding='utf-8')
-            tmp_strings += (len(bytes(variable[1], encoding='utf-8')).to_bytes(length=4, byteorder='little'))
-            tmp_strings += bytes(variable[1], encoding='utf-8')
+            tmp_strings += (len(bytes(variable[0], encoding='latin-1')).to_bytes(length=4, byteorder='little'))
+            tmp_strings += bytes(variable[0], encoding='latin-1')
+            tmp_strings += (len(bytes(variable[1], encoding='latin-1')).to_bytes(length=4, byteorder='little'))
+            tmp_strings += bytes(variable[1], encoding='latin-1')
         return tmp_ints + tmp_strings
 
 
