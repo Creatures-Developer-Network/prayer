@@ -104,7 +104,7 @@ class tag_block:
             self._get_named_string_variables(data=data[8 + key_length + value_length:], count=count - 1)
 
     @staticmethod
-    def generate_tag_block(named_variabe_list):
+    def generate_tag_block_data(named_variabe_list):
         ints = list()
         strings = list()
         for variable in named_variabe_list:
@@ -125,4 +125,19 @@ class tag_block:
             tmp_strings += bytes(variable[1], encoding='latin-1')
         return tmp_ints + tmp_strings
 
-
+    @staticmethod
+    def generate_tag_block(type,name,compress_data, named_variable_list):
+        data_block = tag_block.generate_tag_block_data(named_variable_list)
+        uncompressed_length = len(data_block)
+        if compress_data:
+            data_block = zlib.compress(data_block)
+            compress_data_bit = 1
+        else:
+            compress_data_bit = 0
+        data = bytes(type, encoding='latin-1')
+        data += bytes(name, encoding='latin-1').ljust(128,b'\0')
+        data += len(data_block).to_bytes(length=4, byteorder='little')
+        data += uncompressed_length.to_bytes(length=4, byteorder='little')
+        data += compress_data_bit.to_bytes(length=4, byteorder='little')
+        data += data_block
+        return(data)
