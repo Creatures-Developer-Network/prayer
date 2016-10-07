@@ -5,18 +5,21 @@ class prayer:
     # This list contains all the Blocks the given PRAY file contains.
     blocks = list()
 
-    def __init__(self, file):
-        with open(file, 'rb') as f:
-            self.data = bytearray(f.read())
-            # Every PRAY File begins with 4 Bytes, containg the word 'PRAY' coded in ASCII)
-            # if the File does not contain the Header, it is propably not a PRAY File!
-            if self.data[:4].decode('latin-1') != "PRAY":
-                raise TypeError('The given File "%s" is not a PRAY File! (PRAY Header is missing)' % file)
-            # Strip of the PRAY Header and set the variable data to a Bytearray containing the Data.
-            self.data = self.data[4:]
-            self._extract_pray_blocks(self.data)
-
-        # This funtion takes the data and parses out all the relevant Block informations, as well as the Blocks Data
+    def __init__(self, pray):
+        if type(pray) == bytes:
+            self.data = bytearray(pray)
+        elif type(pray) == bytearray:
+            self.data = pray
+        else:
+            raise TypeError('Only bytes or a bytearray are accepted! a %s was given.' % type(pray))
+        # Every PRAY File begins with 4 Bytes, containg the word 'PRAY' coded in ASCII)
+        # if the File does not contain the Header, it is propably not a PRAY File!
+        if self.data[:4].decode('latin-1') != "PRAY":
+            raise TypeError('The given File "%s" is not a PRAY File! (PRAY Header is missing)' % pray)
+        # Strip of the PRAY Header and set the variable data to a Bytearray containing the Data.
+        self.data = self.data[4:]
+        # this function handles the Date and extracts all pray Blocks, and appends them to the `blocks` list.
+        self._extract_pray_blocks(self.data)
 
     def _extract_pray_blocks(self, data):
         # The first 4 Byte contain the type of the Block
@@ -54,13 +57,9 @@ class prayer:
             self._extract_pray_blocks(data[144 + compressed_data_length:])
 
 
-
-
-
 class tag_block:
-
     # A tag block contains named String and Integer Variables.
-    # It starts with a 32bit Integer containing the number of integer variables, followed by the named Integer Variables
+    # it has a List of Tuples named_variables which contains all the Named variables extracted form the given Data
 
     def __init__(self, block):
         self.mesg_data = bytearray(block['decompressed_data'])
@@ -72,13 +71,16 @@ class tag_block:
         number_of_strings = int.from_bytes(self.str_data[:4], byteorder='little')
         self._get_named_string_variables(data=self.str_data[4:], count=number_of_strings)
 
-
-    # Each named Integer Variable consists of 3 Parts:
-    # - a 32bit Integer Variable that states the length of the name 'key_length'
-    # - n Bytes containing said Name, where n is the length specified in the Integer beforhand 'key'
-    # - a 32bit Integer containing the 'value' of the Named Integer
-
     def _get_named_integer_variables(self, data, count):
+        #
+        # Each named Integer Variable consists of 3 Parts:
+        # - a 32bit Integer Variable that states the length of the name 'key_length'
+        # - n Bytes containing said Name, where n is the length specified in the Integer beforhand 'key'
+        # - a 32bit Integer containing the 'value' of the Named Integer
+        # +------------------+-------------------+--------------+
+        # | 4B  Int len(KEY) | nB KEY in LATIN-1 | 4B Int Value |
+        # +------------------+-------------------+--------------+
+        #
         if count != 0:
             key_length = int.from_bytes(data[:4], byteorder='little')
             key = data[4:4 + key_length].decode('latin-1')
@@ -88,13 +90,17 @@ class tag_block:
         else:
             self.str_data = data
 
-    # Each named String Variable consists of 4 Parts:
-    # - a 32bit Integer Variable that states the length of the name 'key_length'
-    # - n Bytes containing said name, where n is the length specified in the Integer beforhand 'key'
-    # - a 32bit Integer Variable that states the length of the value 'value_length'
-    # - n Bytes containing said 'value', where n is the length specified in the Integer beforhand 'value_length'
-
     def _get_named_string_variables(self, data, count):
+        #
+        # Each named String Variable consists of 4 Parts:
+        # - a 32bit Integer Variable that states the length of the name 'key_length'
+        # - n Bytes containing said name, where n is the length specified in the Integer beforhand 'key'
+        # - a 32bit Integer Variable that states the length of the value 'value_length'
+        # - n Bytes containing said 'value', where n is the length specified in the Integer beforhand 'value_length'
+        # +-----------------+-------------------+-------------------+---------------------+
+        # | 4B Int len(KEY) | nB KEY in LATIN-1 | 4B Int len(Value) | nB Value in LATIN-1 |
+        # +-----------------+-------------------+-------------------+---------------------+
+        #
         if count != 0:
             key_length = int.from_bytes(data[:4], byteorder='little')
             key = data[4:4 + key_length].decode('latin-1')
@@ -102,6 +108,8 @@ class tag_block:
             value = data[8 + key_length:8 + key_length + value_length].decode('latin-1')
             self.named_variables.append((key, value))
             self._get_named_string_variables(data=data[8 + key_length + value_length:], count=count - 1)
+        else:
+            self.str_data = data
 
     @staticmethod
     def generate_tag_block_data(named_variabe_list):
@@ -117,7 +125,7 @@ class tag_block:
             tmp_ints += (len(bytes(variable[0], encoding='latin-1')).to_bytes(length=4, byteorder='little'))
             tmp_ints += bytes(variable[0], encoding='latin-1')
             tmp_ints += variable[1].to_bytes(length=4, byteorder='little')
-        tmp_strings = bytes(len(strings).to_bytes(length=4,byteorder='little'))
+        tmp_strings = bytes(len(strings).to_bytes(length=4, byteorder='little'))
         for variable in strings:
             tmp_strings += (len(bytes(variable[0], encoding='latin-1')).to_bytes(length=4, byteorder='little'))
             tmp_strings += bytes(variable[0], encoding='latin-1')
@@ -126,7 +134,7 @@ class tag_block:
         return tmp_ints + tmp_strings
 
     @staticmethod
-    def generate_tag_block(type,name,compress_data, named_variable_list):
+    def generate_tag_block(type, name, compress_data, named_variable_list):
         data_block = tag_block.generate_tag_block_data(named_variable_list)
         uncompressed_length = len(data_block)
         if compress_data:
@@ -135,9 +143,9 @@ class tag_block:
         else:
             compress_data_bit = 0
         data = bytes(type, encoding='latin-1')
-        data += bytes(name, encoding='latin-1').ljust(128,b'\0')
+        data += bytes(name, encoding='latin-1').ljust(128, b'\0')
         data += len(data_block).to_bytes(length=4, byteorder='little')
         data += uncompressed_length.to_bytes(length=4, byteorder='little')
         data += compress_data_bit.to_bytes(length=4, byteorder='little')
         data += data_block
-        return(data)
+        return (data)
