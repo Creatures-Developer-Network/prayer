@@ -5,25 +5,36 @@ from prayer.blocks import Block, TagBlock
 
 
 
-class Prayer:
+class Pray:
     # This list contains all the Blocks the given PRAY file contains.
     blocks = list()
 
-    def __init__(self, pray):
-        if type(pray) == bytes:
-            self.data = bytearray(pray)
+    def __init__(self, pray=None):
+        if pray == None:
+            data = bytes('PRAY', encoding='latin-1')
+        elif type(pray) == bytes:
+            data = bytearray(pray)
         elif type(pray) == bytearray:
-            self.data = pray
+            data = pray
         else:
             raise TypeError('Only bytes or a bytearray are accepted! a %s was given.' % type(pray))
         # Every PRAY File begins with 4 Bytes, containg the word 'PRAY' coded in ASCII)
         # if the File does not contain the Header, it is propably not a PRAY File!
-        if self.data[:4].decode('latin-1') != "PRAY":
+        if data[:4].decode('latin-1') != "PRAY":
             raise TypeError('The given File "%s" is not a PRAY File! (PRAY Header is missing)' % pray)
-        # Strip of the PRAY Header and set the variable data to a Bytearray containing the Data.
-        self.data = self.data[4:]
         # this function handles the Date and extracts all pray Blocks, and appends them to the `blocks` list.
-        self._extract_pray_blocks(self.data)
+        self._extract_pray_blocks(data[4:])
+    
+    @property
+    def data(self):
+        data = bytes('PRAY', encoding='latin-1')
+        for block in self.blocks:
+            data =+ block.block_data
+        return data
+
+    @data.setter
+    def data(self, data):
+        self._extract_pray_blocks(data)
 
     def _extract_pray_blocks(self, data):
         compressed_data_length = int.from_bytes(data[132:136], byteorder='little', signed=False)
