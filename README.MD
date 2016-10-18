@@ -1,14 +1,11 @@
 # prayer
 
-Prayer is a, work in progress, library to parse PRAY Files.
+Prayer is a, work in progress, __Python3__ library to parse PRAY Files.
 
 Dont use it jet for Production!
 
 ## Usage
 
-`python3 run.py "[PATH TO .agents FILE]"`
-
-take a look at the run.py example code
 
 ## Ressources
 

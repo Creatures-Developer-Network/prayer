@@ -1,5 +1,6 @@
-from prayer import tag_block
+from prayer.blocks import TagBlock
 from datetime import datetime
+
 
 date_sent = datetime.now().strftime('%Y%m%d%H%M%S')
 sender_id = str(17827)
@@ -19,13 +20,8 @@ data = list(
     )
 )
 
-with open('resources/%s.blk' % 'aw_in_message_from_bob.agents', 'wb') as f:
-    f.write(
-        bytes(
-            'PRAY', encoding='latin-1') + tag_block.generate_tag_block(
-            type='IMSG',
-            name=block_name,
-            compress_data=False,
-            named_variable_list=data
-        )
-    )
+with open('resources/%s.blk' % 'herpderp.agents', 'wb') as f:
+    pray_file_data = bytes('PRAY', encoding='latin-1')
+    pray_file_data += TagBlock.create_tag_block(block_type='IMSG', block_name=block_name, named_variables=data).block_data
+    f.write(pray_file_data)
+    
