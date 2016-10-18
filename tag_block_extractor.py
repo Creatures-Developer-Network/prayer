@@ -2,7 +2,7 @@ from prayer.prayer import Pray
 from prayer.blocks import TagBlock
 from sys import argv
 
-with open('resources/chat_message.agents','rb') as f:
+with open(argv[1],'rb') as f:
     pray = Pray( f.read())
 i = 0
 for block in pray.blocks:
