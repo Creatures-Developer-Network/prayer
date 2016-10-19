@@ -9,7 +9,7 @@ class Pray:
     blocks = list()
 
     def __init__(self, pray=None):
-        if pray == None:
+        if pray is None:
             data = bytes('PRAY', encoding='latin-1')
         elif type(pray) == bytes:
             data = bytearray(pray)
@@ -18,7 +18,7 @@ class Pray:
         else:
             raise TypeError(
                 'Only bytes or a bytearray are accepted! a %s was given.' % type(pray))
-        # Every PRAY File begins with 4 Bytes, containg the word 'PRAY' coded in ASCII)
+        # Every PRAY File begins with 4 Bytes, containg the word 'PRAY' coded in latin-1)
         # if the File does not contain the Header, it is propably not a PRAY
         # File!
         if data[:4].decode('latin-1') != "PRAY":

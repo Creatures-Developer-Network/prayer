@@ -5,7 +5,7 @@ from collections import MutableSequence
 class Block:
 
     def __init__(self, data=None):
-        if data == None:
+        if data is None:
             self.type = "NONE"
             self.name = ""
             self.data = b""
