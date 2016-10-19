@@ -22,6 +22,6 @@ data = list(
 
 with open('resources/%s.blk' % 'herpderp.agents', 'wb') as f:
     pray_file_data = bytes('PRAY', encoding='latin-1')
-    pray_file_data += TagBlock.create_tag_block(block_type='IMSG', block_name=block_name, named_variables=data).block_data
+    pray_file_data += TagBlock.create_tag_block(
+        block_type='IMSG', block_name=block_name, named_variables=data).block_data
     f.write(pray_file_data)
-    
