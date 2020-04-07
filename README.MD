@@ -1,10 +1,8 @@
 # prayer
 
----
-**NOTE**
+## NOTE
 
 The Ownership of the prayer repository was transfered to the AlbianWarp Project / Team on **07 Apr 2020**.
-
 This Note will eventually disappear!
 
 ---
