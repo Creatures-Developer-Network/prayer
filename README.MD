@@ -1,5 +1,14 @@
 # prayer
 
+---
+**NOTE**
+
+The Ownership of the prayer repository was transfered to the AlbianWarp Project / Team on **07 Apr 2020**.
+
+This Note will eventually disappear!
+
+---
+
 Prayer is a, work in progress, __Python3__ library to parse PRAY Files.
 
 Dont use it jet for Production!
