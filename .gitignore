@@ -1,6 +1,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+venv/
+build/
+dist/
 
 .idea
 .vscode

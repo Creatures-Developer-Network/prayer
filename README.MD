@@ -4,4 +4,4 @@
 
 Prayer is a, work in progress, __Python3__ library to parse PRAY Files.
 
-Prayer is not production ready ;)
+Prayer is **not** production ready ;)
