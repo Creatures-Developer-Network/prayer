@@ -1,7 +1,0 @@
-"en-gb"
-group MESG "<NUMERIC_BABLE_ID>20160928220230_message"
-"Subject" "<MESSAGE_SUBJECT>"
-"Sender UserID" "<NUMERIC_BABLE_ID>"
-"Message" "<MESSAGE_CONTENT>"
-"Date Sent" "20160928220230"
-"Sender Nickname" "<GAME USER_OF_THIS_WORLD>"
