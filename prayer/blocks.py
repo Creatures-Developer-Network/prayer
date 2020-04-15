@@ -21,7 +21,7 @@ class Block:
 
     @property
     def zblock_data(self):
-        return self._get_block_data(compress_data=true)
+        return self._get_block_data(compress_data=True)
 
     @zblock_data.setter
     def zblock_data(self, block_data):
