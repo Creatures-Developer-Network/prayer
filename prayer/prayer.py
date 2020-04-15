@@ -42,7 +42,6 @@ class Pray:
         self._extract_pray_blocks(data)
 
     def _extract_pray_blocks(self, data):
-
         compressed_data_length = int.from_bytes(
             data[132:136], byteorder="little", signed=False
         )
