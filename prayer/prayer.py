@@ -5,10 +5,9 @@ from prayer.blocks import Block, TagBlock
 
 
 class Pray:
-    # This list contains all the Blocks the given PRAY file contains.
-    blocks = list()
-
     def __init__(self, pray=None):
+        # This list contains all the Blocks the given PRAY file contains.
+        self.blocks = list()
         if pray is None:
             data = bytes("PRAY", encoding="latin-1")
         elif type(pray) == bytes:

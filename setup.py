@@ -5,7 +5,7 @@ with open("README.MD", "r") as fh:
 
 setuptools.setup(
     name="prayer",
-    version="0.1",
+    version="0.1.1",
     description="Library, for working with PRAY files.",
     long_description=long_description,
     long_description_content_type="text/markdown",
