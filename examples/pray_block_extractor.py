@@ -9,7 +9,8 @@ i = 0
 for block in pray.blocks:
     print(block.type)
     print("Block Type: %s\nBlock Name: %s" % (block.type, block.name))
-    with open("./%s-%s-%s.blk" % (os.path.basename(argv[1]), block.type, i), "wb") as f:
+    filename = "./%s-%s-%s.blk" % (os.path.basename(argv[1]), block.type, i)
+    with open(filename, "wb") as f:
         f.write(block._block_data)
         print("Wrote decompressed block data to %s" % filename)
     i += 1
