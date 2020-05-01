@@ -1,34 +1,82 @@
 import zlib
 from collections import MutableSequence
+from typing import ByteString
 
 
 class Block:
-    def __init__(self, data=None):
-        if data is None:
-            self.type = "NONE"
-            self.name = ""
-            self.data = b""
-        else:
-            self._set_block_data(data=data)
+    """
+
+    Baseclass for PRAY blocks.
+
+    Exposes the following attributes:
+    * was_compressed - whether the data for this was originally compressed
+    * data - the binary representation of this block, without compression
+    * compressed_data - the binary data of this block, compressed
+    * size - the total size of the block in bytes, including metadata
+
+    Setting data can
+
+    """
+    def __init__(self, source: ByteString = None):
+        """
+
+        Construct a PRAY block, optionally from a passed ByteString.
+        ByteStrings may be bytes, bytearrays, a memoryview, or a subclass
+        of one of those types.
+
+        :param source: a ByteString object
+        """
+
+        self._was_compressed: bool = False
+        self._size: int = 0
+        self._data = b""
+
+        self.type: str = "NONE"
+        self.name: str = ""
+
+
+        if source:
+            self._set_block_data(data=source)
 
     @property
-    def block_data(self):
+    def data(self) -> bytes:
+        """
+        Get the serialized version of this block
+
+        :return: bytes
+        """
         return self._get_block_data(compress_data=False)
 
-    @block_data.setter
-    def block_data(self, block_data):
+    @data.setter
+    def data(self, block_data: ByteString):
         self._set_block_data(data=block_data)
 
     @property
-    def zblock_data(self):
-        return self._get_block_data(compress_data=True)
+    def compressed_data(self) -> ByteString:
+        return self._get_block_data(compress_data= True)
 
-    @zblock_data.setter
-    def zblock_data(self, block_data):
+    @compressed_data.setter
+    def compressed_data(self, block_data: ByteString) -> None:
         self._set_block_data(data=block_data)
 
-    def _set_block_data(self, data):
-        self._block_data = data
+    @property
+    def was_compressed(self):
+        return self._was_compressed
+
+    @property
+    def size(self):
+        """
+        Get the total size of the compiled block in bytes including the header.
+
+        This is at minimum 4 + 4 + 4 + 4 + 128
+
+
+        :return:
+        """
+
+
+    def _set_block_data(self, data: ByteString):
+
         # The first 4 Byte contain the type of the Block
         self.type = data[:4].decode("latin-1")
         # the following 128 Byte, contain the Name of the Block in latin-1
@@ -55,13 +103,24 @@ class Block:
         # + the Length of the "self.data_length" Variable
         data_raw = data[144 : 144 + data_length]
         if self.compressed:
-            self.data = zlib.decompress(data_raw)
+            self._data = zlib.decompress(data_raw)
         else:
-            self.data = data_raw
+            self._data = data_raw
 
-    def _get_block_data(self, compress_data=False):
+    def _get_block_data(self, compress_data: bool = False) -> ByteString:
+        """
+        Return the data of a block, containing:
+        * block format header
+        * name
+        * block length when uncompressed
+        * block length after compression is applied, if any
+        * a flag block with a bit indicating compression
+
+        :param compress_data: whether to compress the _data of a block.
+        :return: the block as bytes
+        """
         """This Function should return All the Block Data in the correct Block Format, containing, the name, type and what not :D"""
-        data_block = self.data
+        data_block = self._data
         uncompressed_length = len(data_block)
         if compress_data:
             data_block = zlib.compress(data_block)
@@ -83,8 +142,8 @@ class TagBlock(Block):
         Block.__init__(self, data)
 
     @staticmethod
-    def create_tag_block(block_type, block_name, named_variables):
-        tmp_tag_block = TagBlock(Block().block_data)
+    def create_tag_block(block_type, block_name, named_variables) -> None:
+        tmp_tag_block = TagBlock(Block().data)
         tmp_tag_block.type = block_type
         tmp_tag_block.name = block_name
         tmp_tag_block.number_of_integer_variables = 0
@@ -100,7 +159,13 @@ class TagBlock(Block):
 
         raise NotImplementedError
 
-    def _get_named_integer_variables(self, data, count):
+    def _get_named_integer_variables(self, data, count) ->:
+        """
+
+        :param data:
+        :param count:
+        :return:
+        """
         #
         # Each named Integer Variable consists of 3 Parts:
         # - a 32bit Integer Variable that states the length of the name 'key_length'
@@ -151,7 +216,7 @@ class TagBlock(Block):
             self.str_data = data
 
     @property
-    def data(self):
+    def data(self) -> ByteString:
         # if self.named_variables.data_changed:
         if True:
             ints = list()
@@ -183,7 +248,7 @@ class TagBlock(Block):
         return self._data
 
     @data.setter
-    def data(self, data):
+    def data(self, data: ByteString):
         self._data = data
         self.named_variables = list()
         # Integers
@@ -201,6 +266,11 @@ class TagBlock(Block):
 
 
 class TagBlockVariableList(MutableSequence):
+    """
+
+    A sequence of tag blocks
+
+    """
     def __init__(self, data=None):
         self.data_changed = False
         super(TagBlockVariableList, self).__init__()
@@ -209,7 +279,12 @@ class TagBlockVariableList(MutableSequence):
         else:
             self._list = list()
 
-    def append(self, val):
+    def append(self, val) -> None:
+        """
+        Append data to t
+        :param val:
+        :return:
+        """
         list_idx = len(self._list)
         self.data_changed = True
         self.insert(list_idx, val)
