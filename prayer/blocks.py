@@ -2,41 +2,70 @@ import zlib
 from collections import MutableSequence
 from typing import ByteString
 
+METADATA_HEADER_LENGTH = 144
 
 class Block:
     """
 
     Baseclass for PRAY blocks.
 
-    Exposes the following attributes:
-    * was_compressed - whether the data for this was originally compressed
-    * data - the binary representation of this block, without compression
-    * compressed_data - the binary data of this block, compressed
-    * size - the total size of the block in bytes, including metadata
+    The following functions should be overridden by subclasses to
+    extend functionality:
+    * _read_block_data
+    * _write_block_data
 
-    Setting data can
+    All PRAY blocks start with a metadata header structured as follows:
+    +----------------+-----------------+------------------------------+
+    | type/size      | variable        | description                  |
+    +================+=================+==============================+
+    | 4 Bytes        | type            | type of the block            |
+    +----------------+-----------------+------------------------------+
+    | 128 Bytes      | name            | Name of the block, remainder |
+    |                |                 | is padded with zeroes        |
+    +----------------+-----------------+------------------------------+
+    | 32-bit Integer | body_length     | uncompressed data size       |
+    +----------------+-----------------+------------------------------+
+    | 32-bit Integer |  | if compressed, the size when |
+    |                |                 | zipped. otherwise same as    |
+    |                |                 | above.                       |
+    +----------------+-----------------+------------------------------+
+    | 32-bit Integer | compressed      | The first bit should be set  |
+    |                |                 | to 1 if the data is zipped.  |
+    +----------------+-----------------+------------------------------+
+
+    The following attributes and/or properties are exposed:
+    * type - the type of this PRAY block
+    * name - the name of this block
+    * data - the uncompressed binary representation of this block
+    * data_compressed - compressed version of this block's data
+    * compressed - whether this block is compressed or not
 
     """
+
+    # override this in subclasses as well
+    default_type_string: str = "NONE"
+
     def __init__(self, source: ByteString = None):
         """
 
         Construct a PRAY block, optionally from a passed ByteString.
-        ByteStrings may be bytes, bytearrays, a memoryview, or a subclass
-        of one of those types.
+
+        ByteStrings may be bytes, bytearrays, a memoryview,
+        or a subclass of one of those types.
 
         :param source: a ByteString object
         """
-
-        self._was_compressed: bool = False
-        self._size: int = 0
-        self._data = b""
-
-        self.type: str = "NONE"
+        self.type = self.default_type_string
         self.name: str = ""
+        self.data = bytearray(self.type, "latin-1")
 
+        self._body_cache = None
+        self._body_cache_compressed = None
+
+        self._compressed: bool = False
 
         if source:
-            self._set_block_data(data=source)
+            self._read_block_data(data=source)
 
     @property
     def data(self) -> bytes:
@@ -45,37 +74,36 @@ class Block:
 
         :return: bytes
         """
-        return self._get_block_data(compress_data=False)
-
-    @data.setter
-    def data(self, block_data: ByteString):
-        self._set_block_data(data=block_data)
+        return bytes(self._write_block_data(compress_data=False))
 
     @property
-    def compressed_data(self) -> ByteString:
-        return self._get_block_data(compress_data= True)
+    def body(self) -> bytes:
+
+
+    @data.setter
+    def data(self, block_data: ByteString) -> None:
+        self._read_block_data(data=block_data)
+
+    @property
+    def compressed_data(self) -> bytes:
+        return self._write_block_data()
 
     @compressed_data.setter
     def compressed_data(self, block_data: ByteString) -> None:
-        self._set_block_data(data=block_data)
+        self._read_block_header(data=block_data)
 
     @property
-    def was_compressed(self):
-        return self._was_compressed
+    def compressed(self) -> bool:
+        return self._compressed
 
-    @property
-    def size(self):
+
+    def _read_block_header(self, data: ByteString) -> None:
         """
-        Get the total size of the compiled block in bytes including the header.
+        Read the header of a single block.
 
-        This is at minimum 4 + 4 + 4 + 4 + 128
-
-
+        :param data:
         :return:
         """
-
-
-    def _set_block_data(self, data: ByteString):
 
         # The first 4 Byte contain the type of the Block
         self.type = data[:4].decode("latin-1")
@@ -93,7 +121,7 @@ class Block:
         # then there is an 32 Bit Integer containing either a one or a zero, 1
         # = block data is compressed, 0 = block data is uncompressed
         if (
-            int.from_bytes(data[140:144], byteorder="little") == 1
+            int.from_bytes(data[140:METADATA_HEADER_LENGTH], byteorder="little") == 1
             and data_length != uncompressed_data_length
         ):
             self.compressed = True
@@ -101,25 +129,31 @@ class Block:
             self.compressed = False
         # The Compressed and decompressed Data can each be found at offset 144
         # + the Length of the "self.data_length" Variable
-        data_raw = data[144 : 144 + data_length]
-        if self.compressed:
-            self._data = zlib.decompress(data_raw)
-        else:
-            self._data = data_raw
+        body_raw = data[
+            METADATA_HEADER_LENGTH : METADATA_HEADER_LENGTH + data_length
+        ]
 
-    def _get_block_data(self, compress_data: bool = False) -> ByteString:
+        if self.compressed:
+            self._data_cache = zlib.decompress(body_raw)
+        else:
+            self._data_cache = body_raw
+
+    def _write_block_header(self, compress_data: bool = False) -> bytes:
         """
-        Return the data of a block, containing:
-        * block format header
+
+        Return the data of the block, containing:
+        * block type header
         * name
         * block length when uncompressed
         * block length after compression is applied, if any
         * a flag block with a bit indicating compression
 
+        See class docstring for full info
+
         :param compress_data: whether to compress the _data of a block.
         :return: the block as bytes
         """
-        """This Function should return All the Block Data in the correct Block Format, containing, the name, type and what not :D"""
+
         data_block = self._data
         uncompressed_length = len(data_block)
         if compress_data:
@@ -134,6 +168,33 @@ class Block:
         data += compress_data_bit.to_bytes(length=4, byteorder="little")
         data += data_block
         return data
+
+    def _read_block_data(self, data: ByteString) -> None:
+        """
+        Overrideable function for deserializing a block.
+
+        :param data:
+        :return:
+        """
+        if len(data) < 144:
+            raise ValueError("Data too short to be a valid PRAY block of any type")
+
+        self._read_block_header(data)
+        self._body_cache = memoryview(self.datadata)144:]
+
+    def _write_block_data(self, compress_data: bool = False) -> bytes:
+        """
+
+        Overrideable function for serializing the block.
+
+        :param compress_data:
+        :return:
+        """
+        tmp = bytearray()
+        tmp.extend(self._write_block_header(compress_data=True))
+        return bytes(tmp)
+
+
 
 
 class TagBlock(Block):
