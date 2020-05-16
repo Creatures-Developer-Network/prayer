@@ -15,23 +15,23 @@ class Block:
     * _write_block_data
 
     All PRAY blocks start with a metadata header structured as follows:
-    +----------------+-----------------+------------------------------+
-    | type/size      | variable        | description                  |
-    +================+=================+==============================+
-    | 4 Bytes        | type            | type of the block            |
-    +----------------+-----------------+------------------------------+
-    | 128 Bytes      | name            | Name of the block, remainder |
-    |                |                 | is padded with zeroes        |
-    +----------------+-----------------+------------------------------+
-    | 32-bit Integer | body_length     | uncompressed data size       |
-    +----------------+-----------------+------------------------------+
-    | 32-bit Integer |  | if compressed, the size when                |
-    |                |                 | zipped. otherwise same as    |
-    |                |                 | above.                       |
-    +----------------+-----------------+------------------------------+
-    | 32-bit Integer | compressed      | The first bit should be set  |
-    |                |                 | to 1 if the data is zipped.  |
-    +----------------+-----------------+------------------------------+
+    +------------+------------------------+------------------------------+
+    | type/size  | variable               | description                  |
+    +===============+=====================+==============================+
+    | 4 Bytes    | type                   | type prefix of the block.    |
+    +------------+------------------------+------------------------------+
+    | 128 Bytes  | name                   | Name of the block, remainder |
+    |            |                        | is padded with zeroes.       |
+    +------------+------------------------+------------------------------+
+    | Int32      | body_length            | uncompressed data size.      |
+    +------------+------------------------+------------------------------+
+    | Int32      | body_length_compressed | body size when zipped. the   |
+    |            |                        | same as above if block data  |
+    |            |                        | isn't compressed.            |
+    +------------+------------------------+------------------------------+
+    | Int32      | compressed             | The first bit should be set  |
+    |            |                        | to 1 if the data is zipped.  |
+    +------------+------------------------+------------------------------+
 
     The following attributes and/or properties are exposed:
     * type - the type of this PRAY block
@@ -78,6 +78,12 @@ class Block:
 
     @property
     def body(self) -> bytes:
+        """
+        get just the payload of this block, minus the header
+
+        :return: the body of the block as bytes
+        """
+        pass
 
 
     @data.setter
