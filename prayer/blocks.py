@@ -25,7 +25,7 @@ class Block:
     +----------------+-----------------+------------------------------+
     | 32-bit Integer | body_length     | uncompressed data size       |
     +----------------+-----------------+------------------------------+
-    | 32-bit Integer |  | if compressed, the size when |
+    | 32-bit Integer |  | if compressed, the size when                |
     |                |                 | zipped. otherwise same as    |
     |                |                 | above.                       |
     +----------------+-----------------+------------------------------+
