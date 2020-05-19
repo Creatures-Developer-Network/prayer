@@ -5,7 +5,7 @@ from prayer.blocks import Block
 class DerivedBlock(Block):
     """
 
-    An example of easy defining a new block type could be.
+    An example of how easy defining a new block type could be.
 
     Block format consists of a prefix, a header, and a body.
 
@@ -17,7 +17,7 @@ class DerivedBlock(Block):
     compressed versions of the same data.
 
     Reading and writing headers is common to all blocks and can be
-    inherited but the block prefix and body I/O are type-dependent.
+    inherited, but the block prefix and body I/O are type-dependent.
 
     Ideally, you should only need to override:
     * default_type_string, a class-level variable storing the block prefix
@@ -64,17 +64,18 @@ class DerivedBlock(Block):
     def _read_block_body(self, body_raw: memoryview) -> None:
         """
 
-        Read the block's body and fill any internal variables that this
-        subclass has.
+        Read the block's body and fill any internal variables.
 
         Also store the binary data of the source.
+
+        This method is called by _read_block.
 
         Memoryviews are sliceable references to byestring objects that
         support most of the same operations. Slicing one returns another
         memoryview without copying any of the underlying contents. See
         above or the python doc for more information.
 
-        :param body_raw:
+        :param body_raw: the source of the body
         :return:
         """
         # set internal variables here
@@ -87,8 +88,7 @@ class DerivedBlock(Block):
         Doesn't return anything, use the .data or .body properties to
         access the result afterward.
 
-        the data
-        :param compress_data:
+        :param compress_data: whether to compress the data
         :return:
         """
         # serialize internal variables here
@@ -125,6 +125,35 @@ class TestTypeSetter:
         with pytest.raises(TypeError):
             d.type = "TYPE"
 
+class TestNameSetter:
+
+    @pytest.mark.parametrize(
+        "bad_name",
+        (
+            "ﬁ" #  fi ligature in unicode, U+FB01
+            "☎", #  telephone unicode
+            "f" * 128 #  too long, doesn't allow for null byte at end
+        )
+    )
+    def test_name_setter_raises_value_error_invalid_values(self, bad_name):
+        b = Block()
+        with pytest.raises(ValueError):
+            b.name = bad_name
+
+    @pytest.mark.parametrize(
+        "valid_name",
+        (
+            "a",
+            "name.spr",
+            "name.wav",
+            "bg.blk",
+            "a" * 127
+        )
+    )
+    def test_name_setter_sets_name_on_good_values(self, valid_name):
+        b = Block()
+        b.name = valid_name
+        assert b.name == valid_name
 
 
 
