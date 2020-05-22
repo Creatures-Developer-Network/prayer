@@ -1,5 +1,9 @@
+import zlib
+from itertools import chain, product
+from typing import ByteString, Generator
+
 import pytest
-from prayer.blocks import Block
+from prayer.blocks import Block, BLOCK_HEADER_LENGTH, BLOCK_HEADER_STRUCT
 
 
 class DerivedBlock(Block):
@@ -61,7 +65,7 @@ class DerivedBlock(Block):
     # replaces "NONE" that generic blocks have
     default_type_string: str = "TEST"
 
-    def _read_block_body(self, body_raw: memoryview) -> None:
+    def _read_block_body(self, body_source: memoryview) -> None:
         """
 
         Read the block's body and fill any internal variables.
@@ -75,7 +79,7 @@ class DerivedBlock(Block):
         memoryview without copying any of the underlying contents. See
         above or the python doc for more information.
 
-        :param body_raw: the source of the body
+        :param body_source: the source of the body
         :return:
         """
         # set internal variables here
@@ -125,14 +129,15 @@ class TestTypeSetter:
         with pytest.raises(TypeError):
             d.type = "TYPE"
 
+
 class TestNameSetter:
 
     @pytest.mark.parametrize(
         "bad_name",
         (
-            "ﬁ" #  fi ligature in unicode, U+FB01
-            "☎", #  telephone unicode
-            "f" * 128 #  too long, doesn't allow for null byte at end
+            "ﬁ"  # fi ligature in unicode, U+FB01
+            "☎",  # telephone unicode
+            "f" * 128  # too long, doesn't allow for null byte at end
         )
     )
     def test_name_setter_raises_value_error_invalid_values(self, bad_name):
@@ -155,6 +160,176 @@ class TestNameSetter:
         b.name = valid_name
         assert b.name == valid_name
 
+
+def make_valid_datasource_types(
+        bytes_like: ByteString) -> Generator[bytes, bytearray, memoryview]:
+    """
+    Helper function, make a version in every valid bytestring type
+
+    :param bytes_like: will be returned in every ByteString type
+    :return:
+    """
+    for t in {bytes, bytearray, memoryview}:
+        if isinstance(bytes_like, t):
+            yield bytes_like
+        else:
+            yield t(bytes_like)
+
+# helpers useful for testing the block setters
+VALID_SOURCE_DATATYPE_SAMPLES = make_valid_datasource_types(b"test")
+BAD_SOURCE_DATATYPE_SAMPLES = (
+    "string",
+    1,
+    [],
+    (3, 'a')
+)
+BAD_BODY_DATA_SAMPLES = (
+    b"a" * 128,  # too long
+    b"a"  # too short
+)
+
+
+class TestBodySetterAlone:
+
+    @pytest.mark.parametrize(
+        "data_source",
+        VALID_SOURCE_DATATYPE_SAMPLES
+    )
+    def test_sets_body_with_valid_types(self, data_source):
+        b = Block()
+        b.body = data_source
+        assert b.body == bytes(data_source)
+
+    @pytest.mark.parametrize(
+        "bad_arg_type",
+        BAD_SOURCE_DATATYPE_SAMPLES
+    )
+    def test_typerror_on_bad_types(self, bad_arg_type):
+        b = Block()
+        with pytest.raises(TypeError):
+            b.body = bad_arg_type
+
+
+class TestDataSetterAlone:
+
+    @pytest.mark.parametrize(
+        "raw_body,compress",
+        product(
+            (b"test data goes here lets hope its long enough aaaa", ),
+            (True, False)
+        )
+    )
+    def test_sets_values_correctly(self, raw_body, compress):
+        final_body = raw_body
+        if compress:
+            final_body = zlib.compress(final_body)
+
+        data = bytearray(BLOCK_HEADER_STRUCT.pack(
+            b"NONE",
+            b"test_name",
+            len(raw_body), len(final_body),
+            int(compress)
+        ))
+        data.extend(final_body)
+
+        b = Block()
+        b.data = data
+        assert b.type == "NONE"
+        assert b.name == "test_name"
+        assert b.body == final_body
+
+    @pytest.mark.parametrize("bad_data_type", BAD_SOURCE_DATATYPE_SAMPLES)
+    def test_typeerror_on_bad_source_type(
+            self,
+            bad_data_type
+    ):
+        b = Block()
+        with pytest.raises(TypeError):
+            b.data = bad_data_type
+
+    @pytest.mark.parametrize(
+        "truncated_header",
+        (
+            chain(
+                make_valid_datasource_types(b""),
+                make_valid_datasource_types(b"\0"),
+                make_valid_datasource_types(b"\0" * (BLOCK_HEADER_LENGTH - 1))
+            )
+        )
+    )
+    def test_valueerror_on_truncated_header(self, truncated_header):
+        b = Block()
+        with pytest.raises(ValueError):
+            b.data = truncated_header
+
+    @pytest.mark.parametrize(
+        "wrong_length_uncompressed_body",
+        BAD_BODY_DATA_SAMPLES
+    )
+    def test_valuerror_on_wrong_length_uncompressed_body(
+            self,
+            wrong_length_uncompressed_body
+    ):
+        bad_data = bytearray(BLOCK_HEADER_STRUCT.pack(
+            b"NONE",
+            b"test block",
+            50, 50,
+            0
+        ))
+        bad_data.extend(wrong_length_uncompressed_body)
+
+        for type_variant in make_valid_datasource_types(bad_data):
+            with pytest.raises(ValueError):
+                block = Block()
+                block.data = type_variant
+
+    @pytest.mark.parametrize(
+        "wrong_compressed_length",
+        map(
+            zlib.compress,
+            BAD_BODY_DATA_SAMPLES
+        )
+    )
+    def test_valueerror_on_wrong_compressed_length(
+        self,
+        wrong_compressed_length
+    ):
+        bad_data = bytearray(BLOCK_HEADER_STRUCT.pack(
+            b"NONE",
+            b"test block",
+            50, 50,
+            1
+        ))
+        bad_data.extend(wrong_compressed_length)
+
+        for type_variant in make_valid_datasource_types(bad_data):
+            with pytest.raises(ValueError):
+                block = Block()
+                block.data = type_variant
+
+    @pytest.mark.parametrize(
+        "decompresses_to_wrong_length",
+        map(
+            zlib.compress,
+            BAD_BODY_DATA_SAMPLES
+        )
+    )
+    def test_valueerror_on_wrong_decompressed_length(
+            self,
+            decompresses_to_wrong_length
+    ):
+        bad_data = bytearray(BLOCK_HEADER_STRUCT.pack(
+            b"NONE",
+            b"test block",
+            50, len(decompresses_to_wrong_length),
+            1
+        ))
+        bad_data.extend(decompresses_to_wrong_length)
+
+        for type_variant in make_valid_datasource_types(bad_data):
+            with pytest.raises(ValueError):
+                block = Block()
+                block.data = type_variant
 
 
 
