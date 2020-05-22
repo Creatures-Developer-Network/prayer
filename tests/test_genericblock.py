@@ -331,4 +331,32 @@ class TestDataSetterAlone:
                 block = Block()
                 block.data = type_variant
 
+class TestBodySetterIntegrationWithDataGetter:
+
+    @pytest.mark.parametrize(
+        "data, compress",
+        product(
+            (b"test data i hope is ok aaaaaa", ),
+            (True, False)
+        )
+    )
+    def test_body_setter_updates_header(self, data, compress):
+        b = Block()
+        assert b.name == ""
+        assert b.body == b""
+
+        final_data = data
+        if compress:
+            final_data = zlib.compress(data)
+
+        b.body = final_data
+
+        assert b.data ==\
+            BLOCK_HEADER_STRUCT.pack(
+                b"NONE",
+                b"test name",
+                len(data), len(final_data),
+                int(compress)
+            ) + final_data
+
 
