@@ -25,8 +25,8 @@ class DerivedBlock(Block):
 
     Ideally, you should only need to override:
     * default_type_string, a class-level variable storing the block prefix
-    * _read_block_body(self, source: ByteString) -> None
-    * _write_block_body(self, compress_data: bool = False) -> None
+    * _read_body(self, source: ByteString) -> None
+    * _write_body(self, compress_data: bool = False) -> None
 
     The above methods will be called by _read_block and _write_block.
 
@@ -50,7 +50,7 @@ class DerivedBlock(Block):
     there is an invalid symbol.
 
     _read_block should create a memoryview of the data source. That view
-    then gets passed to _read_header and _read_block_body. Memoryviews
+    then gets passed to _read_header and _read_body. Memoryviews
     are sliceable references to an original data source that do not copy
     the underlying data, only point to it. This means many operations are
     far more efficient on a memoryview than on a bytes object.
@@ -65,7 +65,7 @@ class DerivedBlock(Block):
     # replaces "NONE" that generic blocks have
     default_type_string: str = "TEST"
 
-    def _read_block_body(self, body_source: memoryview) -> None:
+    def _read_body(self, body_source: memoryview) -> None:
         """
 
         Read the block's body and fill any internal variables.
@@ -85,7 +85,7 @@ class DerivedBlock(Block):
         # set internal variables here
         pass
 
-    def _write_block_body(self, compress_data: bool = False) -> None:
+    def _write_body(self, compress_data: bool = False) -> None:
         """
         Write the body contents to the internal data cache bytearray.
 
@@ -330,6 +330,5 @@ class TestDataSetterAlone:
             with pytest.raises(ValueError):
                 block = Block()
                 block.data = type_variant
-
 
 
