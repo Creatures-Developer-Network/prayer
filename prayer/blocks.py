@@ -1,48 +1,117 @@
-import zlib
-from collections import MutableSequence
-from typing import ByteString
+"""
+Baseclass & Tag block for PRAY blocks.
 
-METADATA_HEADER_LENGTH = 144
+All PRAY blocks are composed of three binary sections:
+* type, 4 characters specifying the type of block
+* header, metadata structured as in the table below
+* body data
+
+PRAY headers are 144 bytes long, structured as follows:
++------------+------------------------+------------------------------+
+| type/size  | variable               | description                  |
++============+========================+==============================+
+| 4 Bytes    | type                   | type prefix of the block.    |
++------------+------------------------+------------------------------+
+| 128 Bytes  | name                   | Name of the block, remainder |
+|            |                        | is padded with zeroes.       |
++------------+------------------------+------------------------------+
+| Int32      | body_length            | uncompressed data size.      |
++------------+------------------------+------------------------------+
+| Int32      | body_length_compressed | body size when zipped. the   |
+|            |                        | same as above if block data  |
+|            |                        | isn't compressed.            |
++------------+------------------------+------------------------------+
+| Int32      | compressed             | The first bit should be set  |
+|            |                        | to 1 if the data is zipped.  |
++------------+------------------------+------------------------------+
+
+The structure of the body depends on the type of block. This library
+handles this through inheritance of a baseclass.
+
+"""
+import zlib
+from collections import MutableSequence, namedtuple
+from typing import ByteString, Any
+from struct import Struct
+from itertools import chain
+
+
+MAX_BLOCK_NAME_LENGTH = 128
+DEFAULT_ENCODING = 'cp1252'
+
+
+# this Struct definition assumes that python is using the same sizes as
+# cpython does on x86/amd64 by default. It's unlikely that this will be
+# run on python implementations that differ, but it's good to note the
+# assumption just in case.
+BLOCK_HEADER_STRUCT = Struct(
+    "<"  # little endian
+    "4s"  # 4 bytes, type prefix
+    "128s"  # 128 bytes, block name, c-string padded with zeroes
+    "I"  # 32 bit signed int,  uncompressed length
+    "I"  # 32 bit signed int, compressed length
+    "I"  # compression flag
+)
+BLOCK_HEADER_LENGTH = BLOCK_HEADER_STRUCT.size
+BlockHeaderTuple = namedtuple(
+    "BlockHeaderTuple",
+    (
+        "type",
+        "name",
+        "length",
+        "length_compressed",
+        "compressed"
+    )
+)
+
+
+# a hack for type checking behavior that seems contrary to the docs, but
+# that may only be because I don't understand the typing module correctly.
+def valid_data_source(src: Any) -> bool:
+    """
+    Validate the data source as something a block can read from.
+
+    This may be the incorrect way of handling this. The doc for the typing
+    module states that ByteString should match bytes, bytearray, and
+    memoryview, and that the bytes type should match those as well.
+
+    However, ByteString only works with bytes and bytearray builtins.
+
+    :param src: an object to be checked
+    :return:
+    """
+    return isinstance(src, ByteString) or isinstance(src, memoryview)
+
 
 class Block:
     """
 
     Baseclass for PRAY blocks.
 
-    The following functions should be overridden by subclasses to
-    extend functionality:
-    * _read_block_data
-    * _write_block_data
-
-    All PRAY blocks start with a metadata header structured as follows:
-    +------------+------------------------+------------------------------+
-    | type/size  | variable               | description                  |
-    +===============+=====================+==============================+
-    | 4 Bytes    | type                   | type prefix of the block.    |
-    +------------+------------------------+------------------------------+
-    | 128 Bytes  | name                   | Name of the block, remainder |
-    |            |                        | is padded with zeroes.       |
-    +------------+------------------------+------------------------------+
-    | Int32      | body_length            | uncompressed data size.      |
-    +------------+------------------------+------------------------------+
-    | Int32      | body_length_compressed | body size when zipped. the   |
-    |            |                        | same as above if block data  |
-    |            |                        | isn't compressed.            |
-    +------------+------------------------+------------------------------+
-    | Int32      | compressed             | The first bit should be set  |
-    |            |                        | to 1 if the data is zipped.  |
-    +------------+------------------------+------------------------------+
-
     The following attributes and/or properties are exposed:
-    * type - the type of this PRAY block
+    * type - the 4 character type of this PRAY block
     * name - the name of this block
-    * data - the uncompressed binary representation of this block
-    * data_compressed - compressed version of this block's data
-    * compressed - whether this block is compressed or not
+    * data - the uncompressed representation of this block, with header
+    * data_compressed - zlib-compressed version of this block, with header
+    * body - the data of the body, uncompressed
+    * body_compressed - the data of the body, compressed with zlib
+
+    The following attributes may be used to set values:
+    * type, but only on base Block instances
+    * name
+    * data
+    * body
+    * body_compressed
+
+    The structure of the body data is dependent on the type of PRAY block.
+    Subclasses should override the following methods to handle reading and
+    writing block bodies:
+    * _read_body
+    * _write_body
 
     """
 
-    # override this in subclasses as well
+    # override this in subclasses
     default_type_string: str = "NONE"
 
     def __init__(self, source: ByteString = None):
@@ -55,48 +124,138 @@ class Block:
 
         :param source: a ByteString object
         """
-        self.type = self.default_type_string
-        self.name: str = ""
-        self.data = bytearray(self.type, "latin-1")
 
-        self._body_cache = None
-        self._body_cache_compressed = None
+        # set type to the class string value.
+        self._type: str = self.default_type_string
 
+        self._name: str = ""
         self._compressed: bool = False
 
+        # Stubs for caching. Replace with better code in the future?
+        # Works for now as we only return bytes to maintain compatibility
+        # with 3.7.
+        self._body_cache = bytearray()  # uncompressed body data
+
+        # these are updated when the body is? temp vars, really.
+        self._expected_length: int = None
+        self._expected_length_compressed: int = None
+        self._header_cache = bytearray()  # caches header
+
         if source:
-            self._read_block_data(data=source)
+            self._read_block(source)
+
+    @property
+    def type(self) -> str:
+        return self._type
+
+    @type.setter
+    def type(self, value: str) -> None:
+        """
+        Sets the block type, but only on non-subclass Block instances.
+
+        Subclasses raise exceptions since they're supposed to use an
+        override of the class variable.
+
+        The baseclass type value is mutable so users can explore PRAY and
+        warp packets at their leisure.
+
+        :param value: 4 letter string.
+        :return:
+        """
+        if self.__class__ != Block:
+            raise TypeError(
+                "Can only set the type on generic Blocks, not subclasses"
+            )
+        if len(value) != 4:
+            raise ValueError("Block types must be 4 character strings")
+
+        self._type = value
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        """
+        Store the name.
+
+        Raises a ValueError when:
+        * length is over 128
+        * the string can't be encoded to match c2e's encoding
+
+        :param value: candidate for being the new block name
+        :return:
+        """
+
+        # This is more informative than the previous behavior of breaking
+        # at write time, but it's bad. Maybe keep both an encoded and
+        # string version around? Revisit in encoding fix ticket?
+        try:
+            encoded_value = bytes(value, DEFAULT_ENCODING)
+        except UnicodeEncodeError as e:
+            raise ValueError(
+                "Name must only contain characters that "
+                "can be encoded in Windows-1252/CP-1252."
+            ) from e
+
+        # raise if it doesn't fit in a 128-byte null terminated string
+        if len(encoded_value) >= MAX_BLOCK_NAME_LENGTH:
+            raise ValueError(
+                "Name must be encodeable to 127 Windows-1252/CP-1252 "
+                "characters or less."
+            )
+        self._name = value
 
     @property
     def data(self) -> bytes:
         """
-        Get the serialized version of this block
+        Get the serialized version of this block, header + body.
 
         :return: bytes
         """
-        return bytes(self._write_block_data(compress_data=False))
+
+        self._write_block(compress_data=False)
+        return bytes(chain(self._header_cache, self._body_cache))
 
     @property
     def body(self) -> bytes:
         """
-        get just the payload of this block, minus the header
+        Return the body contents of this block, minus
 
         :return: the body of the block as bytes
         """
-        pass
+        return bytes(self._body_cache)
 
+    @body.setter
+    def body(self, body: ByteString) -> None:
+        """
+        Copy the value of the passed bytestring to the internal body cache
+
+        :param body: a bytestring to be the source of the body
+        :return: None
+        """
+        if not valid_data_source(body):
+            raise TypeError(
+                "body must be a bytes, bytearray, or memoryview"
+            )
+
+        # trust python's implementation to handle mutability wisely,
+        # don't unnecessarily throw away and create objects.
+        if len(self._body_cache) > len(body):
+            self._body_cache.clear()
+
+        # copy the contents of body to the internal cache, then interpret it
+        self._body_cache[0:] = body
+        self._read_body()
 
     @data.setter
     def data(self, block_data: ByteString) -> None:
-        self._read_block_data(data=block_data)
+        self._read_block(data=block_data)
 
     @property
-    def compressed_data(self) -> bytes:
-        return self._write_block_data()
-
-    @compressed_data.setter
-    def compressed_data(self, block_data: ByteString) -> None:
-        self._read_block_header(data=block_data)
+    def data_compressed(self) -> bytes:
+        self._write_block_data()
 
     @property
     def compressed(self) -> bool:
@@ -111,40 +270,27 @@ class Block:
         :return:
         """
 
-        # The first 4 Byte contain the type of the Block
-        self.type = data[:4].decode("latin-1")
-        # the following 128 Byte, contain the Name of the Block in latin-1
-        # padded with 'NUL' '\0'
-        self.name = data[4:132].decode("latin-1").rstrip("\0")
-        # then there is a 32 bit Integer, that states the compressed
-        # size/length of the data
-        data_length = int.from_bytes(data[132:136], byteorder="little", signed=False)
-        # right after that, there is another 32 bit Integer that states the
-        # uncompressed size/length of the data.
-        uncompressed_data_length = int.from_bytes(
-            data[136:140], byteorder="little", signed=False
+        raw_header = BlockHeaderTuple._make(
+            BLOCK_HEADER_STRUCT.unpack_from(data)
         )
+
+        self._type = raw_header.type.decode("latin-1")
+        self.name = raw_header.name.decode("latin-1").rstrip("\0")
+        self._expected_length = raw_header.length
+        self._expected_length_compressed = raw_header.length_compressed
+
         # then there is an 32 Bit Integer containing either a one or a zero, 1
         # = block data is compressed, 0 = block data is uncompressed
         if (
-            int.from_bytes(data[140:METADATA_HEADER_LENGTH], byteorder="little") == 1
-            and data_length != uncompressed_data_length
+            raw_header.compressed
+            and raw_header.length != raw_header.length_compressed
         ):
-            self.compressed = True
+            self._compressed = True
         else:
-            self.compressed = False
-        # The Compressed and decompressed Data can each be found at offset 144
-        # + the Length of the "self.data_length" Variable
-        body_raw = data[
-            METADATA_HEADER_LENGTH : METADATA_HEADER_LENGTH + data_length
-        ]
+            self._compressed = False
 
-        if self.compressed:
-            self._data_cache = zlib.decompress(body_raw)
-        else:
-            self._data_cache = body_raw
 
-    def _write_block_header(self, compress_data: bool = False) -> bytes:
+    def _write_block_header(self, compress_data: bool = False) -> None:
         """
 
         Return the data of the block, containing:
@@ -175,31 +321,97 @@ class Block:
         data += data_block
         return data
 
-    def _read_block_data(self, data: ByteString) -> None:
+    def _read_body(
+            self
+    ) -> None:
         """
-        Overrideable function for deserializing a block.
+        Deserialize the internal body cache to internal variables.
 
-        :param data:
+        Override this for subclasses, does nothing on the baseclass.
+        """
+        pass
+
+
+
+    def _write_body(self, compress_data: bool = False) -> None:
+        """
+
+        Serialize subclass internal variables to data caches.
+
+        :param compress_data: whether to compress the data that will be written
         :return:
         """
-        if len(data) < 144:
-            raise ValueError("Data too short to be a valid PRAY block of any type")
+        pass
 
-        self._read_block_header(data)
-        self._body_cache = memoryview(self.datadata)144:]
 
-    def _write_block_data(self, compress_data: bool = False) -> bytes:
+    def _read_block(self, data: ByteString) -> None:
+        """
+        Read whole block data from the passed bytestring.
+
+        It does a number of things:
+        * calls _read_header
+        * decompresses the body data if needed and sets the internal cache
+        * calls _read_body
+
+        :param data: the source bytestring to read from.
+        :return: None
         """
 
-        Overrideable function for serializing the block.
+        try:
+            # using a memoryview avoids copying, even when sliced.
+            root_memoryview: memoryview = memoryview(data)
 
-        :param compress_data:
+        except TypeError as e:
+            # clarifies things for end users little, not sure if it's a good idea
+            raise TypeError(
+                f"Block data can only be read from valid ByteStrings,"
+                f" i.e. bytes, bytearrays, and memoryviews, not"
+                f" {type(data)}"
+            ) from e
+
+        if len(root_memoryview) < BLOCK_HEADER_LENGTH:
+            raise ValueError(
+                "Provided data too short to be a valid PRAY block"
+            )
+
+        self._read_block_header(root_memoryview)
+
+        # Putting body decompression here rather than in _read_body makes
+        # implementing new blocks easier. It eliminates the need for a
+        # super() call to decompress the data at the start of every
+        # _read_body() definition.
+        body_source = root_memoryview[BLOCK_HEADER_LENGTH:]
+
+        if self._compressed:  # check body length and decompress it
+            if len(body_source) != self._expected_length_compressed:
+                raise ValueError(
+                    f"Expected {self._expected_length_compressed} bytes"
+                    f" of compressed body data but got {len(body_source)}"
+                    f" bytes"
+                )
+            body_source = zlib.decompress(body_source)
+
+        if len(body_source) != self._expected_length:
+            raise ValueError(
+                f"Expected uncompressed body to be"
+                f" {self._expected_length} bytes but got "
+                f"{len(body_source)} bytes instead."
+            )
+
+        # set body cache & extract internal data from it
+        self.body = body_source
+        self._read_body()
+
+    def _write_block(self, compress_data: bool = False) -> None:
+        """
+
+        Serialize the block to the internal bytearray
+
         :return:
         """
-        tmp = bytearray()
-        tmp.extend(self._write_block_header(compress_data=True))
-        return bytes(tmp)
 
+        # using a memoryview allows avoiding copying on slices
+        pass
 
 
 
@@ -226,7 +438,7 @@ class TagBlock(Block):
 
         raise NotImplementedError
 
-    def _get_named_integer_variables(self, data, count) ->:
+    def _get_named_integer_variables(self, data, count):
         """
 
         :param data:
