@@ -250,6 +250,11 @@ class Block:
         self._body_cache[0:] = body
         self._read_body()
 
+    @property
+    def body_compressed(self) -> bytes:
+        self._write_body(compress_data=True)
+        return zlib.compress(self._body_cache)
+
     @data.setter
     def data(self, block_data: ByteString) -> None:
         self._read_block(data=block_data)
@@ -414,7 +419,7 @@ class Block:
         self._write_body(compress_data=compress_data)
 
         if compress_data:
-            self._body_compressed_cache = zlib.compress(self._body_cache)
+            self._body_compressed_cache = self.body_compressed
 
         self._write_block_header(compress_data=compress_data)
 
