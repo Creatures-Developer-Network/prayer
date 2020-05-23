@@ -114,7 +114,11 @@ class Block:
     # override this in subclasses
     default_type_string: str = "NONE"
 
-    def __init__(self, source: ByteString = None):
+    def __init__(
+            self,
+            name: str = None,
+            source: ByteString = None
+    ):
         """
 
         Construct a PRAY block, optionally from a passed ByteString.
@@ -128,7 +132,13 @@ class Block:
         # set type to the class string value.
         self._type: str = self.default_type_string
 
-        self._name: str = ""
+        self.name = ""
+        if name is not None:
+            if not isinstance(name, str):
+                raise TypeError("Block name must be a string")
+
+            self.name = name
+
         self._compressed: bool = False
 
         # Stubs for caching. Replace with better code in the future?
@@ -188,6 +198,11 @@ class Block:
         :param value: candidate for being the new block name
         :return:
         """
+
+        if not isinstance(value, str):
+            raise TypeError(
+                f"Name must be set to a str, not a {type(value)}"
+            )
 
         # This is more informative than the previous behavior of breaking
         # at write time, but it's bad. Maybe keep both an encoded and
