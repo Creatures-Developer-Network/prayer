@@ -404,11 +404,11 @@ class Block:
     def _write_block(self, compress_data: bool = False) -> None:
         """
 
-        Serialize the block components internal bytearrays.
+        Serialize the block components to internal bytearrays.
 
         Also handles compression to avoid complicating _write_body.
 
-        :return:
+        :return: None, components are written to internal bytearrays.
         """
 
         self._write_body(compress_data=compress_data)
