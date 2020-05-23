@@ -440,9 +440,20 @@ class Block:
 
 
 class TagBlock(Block):
-    def __init__(self, data):
+
+    default_type_string: str = "NONE"
+
+    def __init__(
+            self,
+            name: str = None,
+            data: ByteString = None
+    ):
         """docstring :D"""
-        Block.__init__(self, data)
+        super().__init__(
+            self,
+            name=name,
+            data=data
+        )
 
     @staticmethod
     def create_tag_block(block_type, block_name, named_variables) -> None:
