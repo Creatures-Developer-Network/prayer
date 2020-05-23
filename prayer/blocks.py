@@ -222,7 +222,7 @@ class Block:
     @property
     def body(self) -> bytes:
         """
-        Return the body contents of this block, minus
+        Return the body contents of this block, uncompressed
 
         :return: the body of the block as bytes
         """
