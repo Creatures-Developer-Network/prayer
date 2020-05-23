@@ -135,11 +135,12 @@ class Block:
         # Works for now as we only return bytes to maintain compatibility
         # with 3.7.
         self._body_cache = bytearray()  # uncompressed body data
+        self._body_compressed_cache = bytearray()
 
         # these are updated when the body is? temp vars, really.
         self._expected_length: int = None
         self._expected_length_compressed: int = None
-        self._header_cache = bytearray()  # caches header
+        self._header_cache = bytearray(BLOCK_HEADER_LENGTH)  # caches header
 
         if source:
             self._read_block(source)
@@ -255,7 +256,8 @@ class Block:
 
     @property
     def data_compressed(self) -> bytes:
-        self._write_block_data()
+        self._write_block(compress_data=True)
+        return bytes(chain(self._header_cache, self._body_compressed_cache))
 
     @property
     def compressed(self) -> bool:
@@ -293,37 +295,38 @@ class Block:
     def _write_block_header(self, compress_data: bool = False) -> None:
         """
 
-        Return the data of the block, containing:
+        Write the header of the block to internal cache.
+        Assumes that the body cache has already been updated.
+
+        The following will be written to the cache:
         * block type header
         * name
         * block length when uncompressed
         * block length after compression is applied, if any
         * a flag block with a bit indicating compression
 
-        See class docstring for full info
+        See class and module docstrings for full info about headers
 
         :param compress_data: whether to compress the _data of a block.
         :return: the block as bytes
         """
 
-        data_block = self._data
-        uncompressed_length = len(data_block)
-        if compress_data:
-            data_block = zlib.compress(data_block)
-            compress_data_bit = 1
-        else:
-            compress_data_bit = 0
-        data = bytes(self.type, encoding="latin-1")
-        data += bytes(self.name, encoding="latin-1").ljust(128, b"\0")
-        data += len(data_block).to_bytes(length=4, byteorder="little")
-        data += uncompressed_length.to_bytes(length=4, byteorder="little")
-        data += compress_data_bit.to_bytes(length=4, byteorder="little")
-        data += data_block
-        return data
+        uncompressed_length = len(self._body_cache)
+        data_block = self._body_cache
 
-    def _read_body(
-            self
-    ) -> None:
+        if compress_data:
+            data_block = self._body_compressed_cache
+
+        BLOCK_HEADER_STRUCT.pack_into(
+            self._header_cache, 0,
+            bytes(self.type, encoding="latin-1"),
+            bytes(self.name, encoding="latin-1").ljust(128, b"\0"),
+            uncompressed_length,
+            len(data_block),
+            int(compress_data)
+        )
+
+    def _read_body(self) -> None:
         """
         Deserialize the internal body cache to internal variables.
 
@@ -331,18 +334,14 @@ class Block:
         """
         pass
 
-
-
-    def _write_body(self, compress_data: bool = False) -> None:
+    def _write_body(self, compress_data: bool = True) -> None:
         """
 
         Serialize subclass internal variables to data caches.
 
-        :param compress_data: whether to compress the data that will be written
         :return:
         """
         pass
-
 
     def _read_block(self, data: ByteString) -> None:
         """
@@ -405,14 +404,19 @@ class Block:
     def _write_block(self, compress_data: bool = False) -> None:
         """
 
-        Serialize the block to the internal bytearray
+        Serialize the block components internal bytearrays.
+
+        Also handles compression to avoid complicating _write_body.
 
         :return:
         """
 
-        # using a memoryview allows avoiding copying on slices
-        pass
+        self._write_body(compress_data=compress_data)
 
+        if compress_data:
+            self._body_compressed_cache = zlib.compress(self._body_cache)
+
+        self._write_block_header(compress_data=compress_data)
 
 
 class TagBlock(Block):
