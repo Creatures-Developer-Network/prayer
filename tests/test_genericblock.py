@@ -129,32 +129,38 @@ class TestTypeSetter:
         with pytest.raises(TypeError):
             d.type = "TYPE"
 
+BAD_NAMES = (
+    "ﬁ"  # fi ligature in unicode, U+FB01
+    "☎",  # telephone unicode
+    "f" * 128  # too long, doesn't allow for null byte at end
+)
+VALID_NAMES = (
+    "a",
+    "name.spr",
+    "name.wav",
+    "bg.blk",
+    "a" * 127
+)
+BAD_NAME_TYPES = (
+    1,
+    lambda a: a
+)
 
 class TestNameSetter:
 
-    @pytest.mark.parametrize(
-        "bad_name",
-        (
-            "ﬁ"  # fi ligature in unicode, U+FB01
-            "☎",  # telephone unicode
-            "f" * 128  # too long, doesn't allow for null byte at end
-        )
-    )
+    @pytest.mark.parametrize("bad_name_type", BAD_NAME_TYPES)
+    def test_name_setter_raises_typerror_on_nonstring(self, bad_name_type):
+        b = Block()
+        with pytest.raises(TypeError):
+            b.name = bad_name_type
+
+    @pytest.mark.parametrize("bad_name", BAD_NAMES)
     def test_name_setter_raises_value_error_invalid_values(self, bad_name):
         b = Block()
         with pytest.raises(ValueError):
             b.name = bad_name
 
-    @pytest.mark.parametrize(
-        "valid_name",
-        (
-            "a",
-            "name.spr",
-            "name.wav",
-            "bg.blk",
-            "a" * 127
-        )
-    )
+    @pytest.mark.parametrize("valid_name", VALID_NAMES)
     def test_name_setter_sets_name_on_good_values(self, valid_name):
         b = Block()
         b.name = valid_name
@@ -382,5 +388,19 @@ class TestBodySetterIntegrationWithDataGetters:
 
         assert b.data_compressed == new_dat
 
+class TestConstructorNameKwarg:
 
+    @pytest.mark.parametrize("bad_type", BAD_NAME_TYPES)
+    def test_nonstring_name_kwarg_raises_typerror(self, bad_type):
+        with pytest.raises(TypeError):
+            b = Block(name=bad_type)
 
+    @pytest.mark.parametrize("invalid_name", BAD_NAMES)
+    def test_invalid_name_kwarg_raises_valueerror(self, invalid_name):
+        with pytest.raises(ValueError):
+            b = Block(name=invalid_name)
+
+    @pytest.mark.parametrize("valid_name", VALID_NAMES)
+    def test_valid_data_kwarg_sets_name(self, valid_name):
+        b = Block(name=valid_name)
+        assert b.name == valid_name
