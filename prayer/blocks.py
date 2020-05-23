@@ -2,7 +2,7 @@
 Baseclass & Tag block for PRAY blocks.
 
 All PRAY blocks are composed of three binary sections:
-* type, 4 characters specifying the type of block
+* prefix, 4 characters specifying the prefix of block
 * header, metadata structured as in the table below
 * body data
 
@@ -10,7 +10,7 @@ PRAY headers are 144 bytes long, structured as follows:
 +------------+------------------------+------------------------------+
 | type/size  | variable               | description                  |
 +============+========================+==============================+
-| 4 Bytes    | type                   | type prefix of the block.    |
+| 4 Bytes    | prefix                   | prefix prefix of the block.    |
 +------------+------------------------+------------------------------+
 | 128 Bytes  | name                   | Name of the block, remainder |
 |            |                        | is padded with zeroes.       |
@@ -56,7 +56,7 @@ BLOCK_HEADER_LENGTH = BLOCK_HEADER_STRUCT.size
 BlockHeaderTuple = namedtuple(
     "BlockHeaderTuple",
     (
-        "type",
+        "prefix",
         "name",
         "length",
         "length_compressed",
@@ -73,7 +73,7 @@ def valid_data_source(src: Any) -> bool:
 
     This may be the incorrect way of handling this. The doc for the typing
     module states that ByteString should match bytes, bytearray, and
-    memoryview, and that the bytes type should match those as well.
+    memoryview, and that the bytes prefix should match those as well.
 
     However, ByteString only works with bytes and bytearray builtins.
 
@@ -89,7 +89,7 @@ class Block:
     Baseclass for PRAY blocks.
 
     The following attributes and/or properties are exposed:
-    * type - the 4 character type of this PRAY block
+    * prefix - the 4 character prefix of this PRAY block
     * name - the name of this block
     * data - the uncompressed representation of this block, with header
     * data_compressed - zlib-compressed version of this block, with header
@@ -97,13 +97,13 @@ class Block:
     * body_compressed - the data of the body, compressed with zlib
 
     The following attributes may be used to set values:
-    * type, but only on base Block instances
+    * prefix, but only on base Block instances
     * name
     * data
     * body
     * body_compressed
 
-    The structure of the body data is dependent on the type of PRAY block.
+    The structure of the body data is dependent on the prefix of PRAY block.
     Subclasses should override the following methods to handle reading and
     writing block bodies:
     * _read_body
@@ -129,8 +129,8 @@ class Block:
         :param source: a ByteString object
         """
 
-        # set type to the class string value.
-        self._type: str = self.default_type_string
+        # set prefix to the class string value.
+        self._prefix: str = self.default_type_string
 
         self.name = ""
         if name is not None:
@@ -156,18 +156,18 @@ class Block:
             self._read_block(source)
 
     @property
-    def type(self) -> str:
-        return self._type
+    def prefix(self) -> str:
+        return self._prefix
 
-    @type.setter
-    def type(self, value: str) -> None:
+    @prefix.setter
+    def prefix(self, value: str) -> None:
         """
-        Sets the block type, but only on non-subclass Block instances.
+        Sets the block prefix, but only on non-subclass Block instances.
 
         Subclasses raise exceptions since they're supposed to use an
         override of the class variable.
 
-        The baseclass type value is mutable so users can explore PRAY and
+        The baseclass prefix value is mutable so users can explore PRAY and
         warp packets at their leisure.
 
         :param value: 4 letter string.
@@ -175,12 +175,12 @@ class Block:
         """
         if self.__class__ != Block:
             raise TypeError(
-                "Can only set the type on generic Blocks, not subclasses"
+                "Can only set the prefix on generic Blocks, not subclasses"
             )
         if len(value) != 4:
             raise ValueError("Block types must be 4 character strings")
 
-        self._type = value
+        self._prefix = value
 
     @property
     def name(self) -> str:
@@ -296,7 +296,7 @@ class Block:
             BLOCK_HEADER_STRUCT.unpack_from(data)
         )
 
-        self._type = raw_header.type.decode("latin-1")
+        self._prefix = raw_header.prefix.decode("latin-1")
         self.name = raw_header.name.decode("latin-1").rstrip("\0")
         self._expected_length = raw_header.length
         self._expected_length_compressed = raw_header.length_compressed
@@ -319,7 +319,7 @@ class Block:
         Assumes that the body cache has already been updated.
 
         The following will be written to the cache:
-        * block type header
+        * block prefix header
         * name
         * block length when uncompressed
         * block length after compression is applied, if any
@@ -339,7 +339,7 @@ class Block:
 
         BLOCK_HEADER_STRUCT.pack_into(
             self._header_cache, 0,
-            bytes(self.type, encoding="latin-1"),
+            bytes(self.prefix, encoding="latin-1"),
             bytes(self.name, encoding="latin-1").ljust(128, b"\0"),
             uncompressed_length,
             len(data_block),
@@ -458,7 +458,7 @@ class TagBlock(Block):
     @staticmethod
     def create_tag_block(block_type, block_name, named_variables) -> None:
         tmp_tag_block = TagBlock(Block().data)
-        tmp_tag_block.type = block_type
+        tmp_tag_block.prefix = block_type
         tmp_tag_block.name = block_name
         tmp_tag_block.number_of_integer_variables = 0
         tmp_tag_block.number_of_string_varaibles = 0

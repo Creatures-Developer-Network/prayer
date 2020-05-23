@@ -104,22 +104,22 @@ class TestTypeSetter:
     @pytest.mark.parametrize("bad_string", ["_", "bad", "toolong"])
     def test_base_setter_raises_value_error_on_bad_length(self, bad_string):
         """
-        type.setter raises ValueError if the prefix set isn't 4 characters long
+        prefix.setter raises ValueError if the prefix set isn't 4 characters long
         """
         b = Block()
         with pytest.raises(ValueError):
-            b.type = bad_string
-        assert b.type == "NONE"
+            b.prefix = bad_string
+        assert b.prefix == "NONE"
 
     @pytest.mark.parametrize("valid", ("fake", "four"))
     def test_setter_sets_type_for_valid_values(self, valid):
         """
-        type.setter changes the type for four letter strings
+        prefix.setter changes the prefix for four letter strings
         """
         fake = valid
         b = Block()
-        b.type = fake
-        assert b.type == fake
+        b.prefix = fake
+        assert b.prefix == fake
 
     def test_setter_calls_on_subclasses_raise_typerror(self):
         """
@@ -127,7 +127,7 @@ class TestTypeSetter:
         """
         d = DerivedBlock()
         with pytest.raises(TypeError):
-            d.type = "TYPE"
+            d.prefix = "TYPE"
 
 BAD_NAMES = (
     "ﬁ"  # fi ligature in unicode, U+FB01
@@ -240,7 +240,7 @@ class TestDataSetterAlone:
 
         b = Block()
         b.data = data
-        assert b.type == "NONE"
+        assert b.prefix == "NONE"
         assert b.name == "test_name"
         assert b.body == final_body
 

@@ -6,10 +6,10 @@ with open(argv[1], "rb") as f:
     pray = Pray(f.read())
 i = 0
 for block in pray.blocks:
-    print("Block Type: %s\nBlock Name: %s" % (block.type, block.name))
-    if block.type in ["ICHT", "IMSG", "MESG", "CHAT", "OMSG", "OCHT", "MOEP", "GLST"]:
+    print("Block Type: %s\nBlock Name: %s" % (block.prefix, block.name))
+    if block.prefix in ["ICHT", "IMSG", "MESG", "CHAT", "OMSG", "OCHT", "MOEP", "GLST"]:
         # write tag_block to Disk for analysis.
-        filename = "./%s-%s.blk" % (block.type, i)
+        filename = "./%s-%s.blk" % (block.prefix, i)
         with open(filename, "wb") as f:
             f.write(block.data)
             print("Wrote decompressed block data to %s" % filename)
