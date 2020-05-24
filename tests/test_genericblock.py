@@ -404,3 +404,32 @@ class TestConstructorNameKwarg:
     def test_valid_data_kwarg_sets_name(self, valid_name):
         b = Block(name=valid_name)
         assert b.name == valid_name
+
+class TestConstructorCompressedKwarg:
+    @pytest.mark.parametrize("compressed", (True, False))
+    def test_bool_arg_sets_compressed_flag(self, compressed):
+        b = Block(compressed=compressed)
+        assert b.compressed == compressed
+
+    @pytest.mark.parametrize("bad_type", (1, 0, None, "bad"))
+    def test_invalid_types_raise_typerror(self, bad_type):
+        with pytest.raises(TypeError):
+            b = Block(compressed=bad_type)
+
+class TestConstructorBodyKwarg:
+    @pytest.mark.parametrize(
+        "body_data",
+        VALID_SOURCE_DATATYPE_SAMPLES
+    )
+    def test_uncompressed_body_sets_value(self, body_data):
+        b = Block(body=body_data)
+        assert b.body == body_data
+
+    @pytest.mark.parametrize(
+        "body_data",
+        VALID_SOURCE_DATATYPE_SAMPLES
+    )
+    def test_compressed_kwarg_causes_extraction(self, body_data):
+        zipped = zlib.compress(body_data)
+        b = Block(compressed=True, body=zipped)
+        assert b.body == body_data
