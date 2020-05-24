@@ -405,6 +405,7 @@ class TestConstructorNameKwarg:
         b = Block(name=valid_name)
         assert b.name == valid_name
 
+
 class TestConstructorCompressedKwarg:
     @pytest.mark.parametrize("compressed", (True, False))
     def test_bool_arg_sets_compressed_flag(self, compressed):
@@ -415,6 +416,7 @@ class TestConstructorCompressedKwarg:
     def test_invalid_types_raise_typerror(self, bad_type):
         with pytest.raises(TypeError):
             b = Block(compressed=bad_type)
+
 
 class TestConstructorBodyKwarg:
     @pytest.mark.parametrize(
