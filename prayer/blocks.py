@@ -31,7 +31,7 @@ handles this through inheritance of a baseclass.
 """
 import zlib
 from collections import MutableSequence, namedtuple
-from typing import ByteString, Any
+from typing import ByteString, Any, Union
 from struct import Struct
 from itertools import chain
 
@@ -94,6 +94,7 @@ class Block:
     The following attributes and/or properties are exposed:
     * prefix - the 4 character prefix of this PRAY block
     * name - the name of this block
+    * compressed - whether the block was compressed at read
     * data - the uncompressed representation of this block, with header
     * data_compressed - zlib-compressed version of this block, with header
     * body - the data of the body, uncompressed
@@ -120,16 +121,36 @@ class Block:
     def __init__(
             self,
             name: str = None,
-            source: ByteString = None
+            compressed: Union[bool, int] = False,
+            body: ByteString = None,
+            data: ByteString = None
     ):
         """
 
         Construct a PRAY block, optionally from a passed ByteString.
 
+        The bytestrings may be passed as either body or data keyword args.
+
         ByteStrings may be bytes, bytearrays, a memoryview,
         or a subclass of one of those types.
 
-        :param source: a ByteString object
+        Name sets the name of the block in the header.
+
+        Compressed singals whether the source data was initially compressed.
+        It also tells the constructor whether the body argument should be
+        treated as zipped or not.
+
+        Body is the data to read the data of the block from. If compressed
+        is true, then this data will be unzipped before attempting to set
+        the body data of the block.
+
+        The data parameter overrides all other types, and the block will
+        attempt to read from it.
+
+        :param name: the name to set the block's name attribute to.
+        :param compressed: whether the body data was compressed at read time
+        :param body: a ByteString to read as body data
+        :param data: a ByteString including both header and body data
         """
 
         # set prefix to the class string value.
@@ -142,7 +163,7 @@ class Block:
 
             self.name = name
 
-        self._compressed: bool = False
+        self.compressed = compressed
 
         # Stubs for caching. Replace with better code in the future?
         # Works for now as we only return bytes to maintain compatibility
@@ -155,8 +176,13 @@ class Block:
         self._expected_length_decompressed: int = None
         self._header_cache = bytearray(BLOCK_HEADER_LENGTH)  # caches header
 
-        if source:
-            self._read_block(source)
+        if data:
+            self._read_block(data)
+        elif body:
+            if self.compressed:
+                self.body = zlib.decompress(body)
+            else:
+                self.body = body
 
     @property
     def prefix(self) -> str:
@@ -290,6 +316,16 @@ class Block:
     def compressed(self) -> bool:
         return self._compressed
 
+    @compressed.setter
+    def compressed(self, compressed: bool) -> None:
+        if isinstance(compressed, bool):
+            self._compressed = compressed
+        else:
+            raise TypeError(
+                f"Expected bool or int for compressed,"
+                f" but got {compressed}."
+            )
+
 
     def _read_block_header(self, data: ByteString) -> None:
         """
@@ -370,6 +406,7 @@ class Block:
         """
         pass
 
+
     def _read_block(self, data: ByteString) -> None:
         """
         Read whole block data from the passed bytestring.
@@ -449,19 +486,32 @@ INSTANCES_CAN_CHANGE_PREFIX.add(Block)
 
 class TagBlock(Block):
 
-    default_type_string: str = "NONE"
+    # note this isn't an actual valid prefix, and should be overridden
+    # by subclasses, as with the "NONE" prefix the base Block class uses.
+    default_type_string: str = "TAGS"
 
     def __init__(
             self,
             name: str = None,
+            compressed: Union[bool, int] = True,
+            body: ByteString = None,
             data: ByteString = None
     ):
-        """docstring :D"""
+        """
+        Construct a base TagBlock. Mirrors the keywords on Block.
+
+        :param name:
+        :param compressed:
+        :param body:
+        :param data:
+        """
         super().__init__(
-            self,
             name=name,
+            compressed=compressed,
+            body=body,
             data=data
         )
+
 
     @staticmethod
     def create_tag_block(block_type, block_name, named_variables) -> None:
