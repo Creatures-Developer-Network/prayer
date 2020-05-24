@@ -1,5 +1,5 @@
 """
-Baseclass & Tag block for PRAY blocks.
+Baseclass Block & TagBlocks for PRAY blocks.
 
 All PRAY blocks are composed of three binary sections:
 * prefix, 4 characters specifying the prefix of block
@@ -83,6 +83,9 @@ def valid_data_source(src: Any) -> bool:
     return isinstance(src, ByteString) or isinstance(src, memoryview)
 
 
+# track which Block classes are generics allowed to change their prefix
+INSTANCES_CAN_CHANGE_PREFIX = set()
+
 class Block:
     """
 
@@ -162,20 +165,24 @@ class Block:
     @prefix.setter
     def prefix(self, value: str) -> None:
         """
-        Sets the block prefix, but only on non-subclass Block instances.
+        Sets the block prefix, but only on base Block and TagBlocks.
 
         Subclasses raise exceptions since they're supposed to use an
         override of the class variable.
 
-        The baseclass prefix value is mutable so users can explore PRAY and
-        warp packets at their leisure.
+        The generic baseclass prefix values are mutable so users can
+        explore PRAY and warp packets at their leisure.
 
         :param value: 4 letter string.
         :return:
         """
-        if self.__class__ != Block:
+
+        # it's important to use the current class and
+        # not an instanceof call for this.
+        if self.__class__ not in INSTANCES_CAN_CHANGE_PREFIX:
             raise TypeError(
-                "Can only set the prefix on generic Blocks, not subclasses"
+                "Can only change the prefix on generic Blocks and "
+                "TagBlocks not their subclasses."
             )
         if len(value) != 4:
             raise ValueError("Block types must be 4 character strings")
@@ -438,6 +445,8 @@ class Block:
         self._write_block_header(compress_data=compress_data)
 
 
+INSTANCES_CAN_CHANGE_PREFIX.add(Block)
+
 class TagBlock(Block):
 
     default_type_string: str = "NONE"
@@ -576,6 +585,9 @@ class TagBlock(Block):
         self._get_named_string_variables(
             data=self.str_data[4:], count=self.number_of_string_varaibles
         )
+
+
+INSTANCES_CAN_CHANGE_PREFIX.add(TagBlock)
 
 
 class TagBlockVariableList(MutableSequence):
