@@ -7,23 +7,23 @@ All PRAY blocks are composed of three binary sections:
 * body data
 
 PRAY headers are 144 bytes long, structured as follows:
-+------------+------------------------+------------------------------+
-| type/size  | variable               | description                  |
-+============+========================+==============================+
-| 4 Bytes    | prefix                   | prefix prefix of the block.    |
-+------------+------------------------+------------------------------+
-| 128 Bytes  | name                   | Name of the block, remainder |
-|            |                        | is padded with zeroes.       |
-+------------+------------------------+------------------------------+
-| Int32      | body_length            | uncompressed data size.      |
-+------------+------------------------+------------------------------+
-| Int32      | body_length_compressed | body size when zipped. the   |
-|            |                        | same as above if block data  |
-|            |                        | isn't compressed.            |
-+------------+------------------------+------------------------------+
-| Int32      | compressed             | The first bit should be set  |
-|            |                        | to 1 if the data is zipped.  |
-+------------+------------------------+------------------------------+
++------------+--------------------------+------------------------------+
+| type/size  | variable                 | description                  |
++============+==========================+==============================+
+| 4 Bytes    | prefix                   | prefix prefix of the block.  |
++------------+--------------------------+------------------------------+
+| 128 Bytes  | name                     | Name of the block, remainder |
+|            |                          | is padded with zeroes.       |
++------------+--------------------------+------------------------------+
+| Int32      | body_length              | uncompressed data size.      |
++------------+--------------------------+------------------------------+
+| Int32      | body_length_decompressed | body size when unzipped. the |
+|            |                          | same as above if block data  |
+|            |                          | isn't compressed.            |
++------------+--------------------------+------------------------------+
+| Int32      | compressed               | The first bit should be set  |
+|            |                          | to 1 if the data is zipped.  |
++------------+------------------------+--------------------------------+
 
 The structure of the body depends on the type of block. This library
 handles this through inheritance of a baseclass.
@@ -59,7 +59,7 @@ BlockHeaderTuple = namedtuple(
         "prefix",
         "name",
         "length",
-        "length_compressed",
+        "length_decompressed",
         "compressed"
     )
 )
@@ -149,7 +149,7 @@ class Block:
 
         # these are updated when the body is? temp vars, really.
         self._expected_length: int = None
-        self._expected_length_compressed: int = None
+        self._expected_length_decompressed: int = None
         self._header_cache = bytearray(BLOCK_HEADER_LENGTH)  # caches header
 
         if source:
@@ -299,13 +299,13 @@ class Block:
         self._prefix = raw_header.prefix.decode("latin-1")
         self.name = raw_header.name.decode("latin-1").rstrip("\0")
         self._expected_length = raw_header.length
-        self._expected_length_compressed = raw_header.length_compressed
+        self._expected_length_decompressed = raw_header.length_decompressed
 
         # then there is an 32 Bit Integer containing either a one or a zero, 1
         # = block data is compressed, 0 = block data is uncompressed
         if (
             raw_header.compressed
-            and raw_header.length != raw_header.length_compressed
+            and raw_header.length != raw_header.length_decompressed
         ):
             self._compressed = True
         else:
@@ -341,8 +341,8 @@ class Block:
             self._header_cache, 0,
             bytes(self.prefix, encoding="latin-1"),
             bytes(self.name, encoding="latin-1").ljust(128, b"\0"),
-            uncompressed_length,
             len(data_block),
+            uncompressed_length,
             int(compress_data)
         )
 
@@ -402,24 +402,23 @@ class Block:
         body_source = root_memoryview[BLOCK_HEADER_LENGTH:]
 
         if self._compressed:  # check body length and decompress it
-            if len(body_source) != self._expected_length_compressed:
+            if len(body_source) != self._expected_length:
                 raise ValueError(
-                    f"Expected {self._expected_length_compressed} bytes"
+                    f"Expected {self._expected_length} bytes"
                     f" of compressed body data but got {len(body_source)}"
-                    f" bytes"
+                    f" bytes instead"
                 )
             body_source = zlib.decompress(body_source)
 
-        if len(body_source) != self._expected_length:
+        if len(body_source) != self._expected_length_decompressed:
             raise ValueError(
                 f"Expected uncompressed body to be"
-                f" {self._expected_length} bytes but got "
+                f" {self._expected_length_decompressed} bytes but got "
                 f"{len(body_source)} bytes instead."
             )
 
         # set body cache & extract internal data from it
         self.body = body_source
-        self._read_body()
 
     def _write_block(self, compress_data: bool = False) -> None:
         """
