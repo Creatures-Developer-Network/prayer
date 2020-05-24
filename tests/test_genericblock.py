@@ -327,7 +327,7 @@ class TestDataSetterAlone:
         bad_data = bytearray(BLOCK_HEADER_STRUCT.pack(
             b"NONE",
             b"test block",
-            50, len(decompresses_to_wrong_length),
+            len(decompresses_to_wrong_length), 50,
             1
         ))
         bad_data.extend(decompresses_to_wrong_length)
@@ -347,7 +347,7 @@ class TestBodySetterIntegrationWithDataGetters:
             b"b" * 40
         )
     )
-    def test_body_setter_updates_header(self, data):
+    def test_body_setter_updates_data_property(self, data):
         b = Block()
         assert b.name == ""
         assert b.body == b""
@@ -371,7 +371,7 @@ class TestBodySetterIntegrationWithDataGetters:
             b"b" * 40
         )
     )
-    def test_body_setter_updates_header(self, data):
+    def test_body_setter_updates_data_compressed_property(self, data):
         b = Block()
         assert b.name == ""
         assert b.body == b""
@@ -382,7 +382,7 @@ class TestBodySetterIntegrationWithDataGetters:
         new_dat = BLOCK_HEADER_STRUCT.pack(
                 b"NONE",
                 b"",
-                len(data), len(compressed),
+                len(compressed), len(data),
                 1
             ) + compressed
 
