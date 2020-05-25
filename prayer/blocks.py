@@ -1,8 +1,7 @@
 """
 Baseclass Block & TagBlocks for PRAY blocks.
 
-All PRAY blocks are composed of three binary sections:
-* prefix, 4 characters specifying the prefix of block
+All PRAY blocks are composed of two binary sections:
 * header, metadata structured as in the table below
 * body data
 
