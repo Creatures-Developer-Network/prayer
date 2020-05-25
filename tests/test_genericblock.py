@@ -1,9 +1,9 @@
 import zlib
 from itertools import chain, product
-from typing import ByteString, Generator
 
 import pytest
 from prayer.blocks import Block, BLOCK_HEADER_LENGTH, BLOCK_HEADER_STRUCT
+from tests.common import make_valid_bytestrings, bytestrings_tuple
 
 
 class DerivedBlock(Block):
@@ -167,22 +167,8 @@ class TestNameSetter:
         assert b.name == valid_name
 
 
-def make_valid_datasource_types(
-        bytes_like: ByteString) -> Generator[bytes, bytearray, memoryview]:
-    """
-    Helper function, make a version in every valid bytestring type
-
-    :param bytes_like: will be returned in every ByteString type
-    :return:
-    """
-    for t in {bytes, bytearray, memoryview}:
-        if isinstance(bytes_like, t):
-            yield bytes_like
-        else:
-            yield t(bytes_like)
-
 # helpers useful for testing the block setters
-VALID_SOURCE_DATATYPE_SAMPLES = tuple(make_valid_datasource_types(b"test"))
+VALID_SOURCE_DATATYPE_SAMPLES = bytestrings_tuple(b"test")
 BAD_SOURCE_DATATYPE_SAMPLES = (
     "string",
     1,
@@ -257,9 +243,9 @@ class TestDataSetterAlone:
         "truncated_header",
         (
             chain(
-                make_valid_datasource_types(b""),
-                make_valid_datasource_types(b"\0"),
-                make_valid_datasource_types(b"\0" * (BLOCK_HEADER_LENGTH - 1))
+                make_valid_bytestrings(b""),
+                make_valid_bytestrings(b"\0"),
+                make_valid_bytestrings(b"\0" * (BLOCK_HEADER_LENGTH - 1))
             )
         )
     )
@@ -284,7 +270,7 @@ class TestDataSetterAlone:
         ))
         bad_data.extend(wrong_length_uncompressed_body)
 
-        for type_variant in make_valid_datasource_types(bad_data):
+        for type_variant in make_valid_bytestrings(bad_data):
             with pytest.raises(ValueError):
                 block = Block()
                 block.data = type_variant
@@ -308,7 +294,7 @@ class TestDataSetterAlone:
         ))
         bad_data.extend(wrong_compressed_length)
 
-        for type_variant in make_valid_datasource_types(bad_data):
+        for type_variant in make_valid_bytestrings(bad_data):
             with pytest.raises(ValueError):
                 block = Block()
                 block.data = type_variant
@@ -332,7 +318,7 @@ class TestDataSetterAlone:
         ))
         bad_data.extend(decompresses_to_wrong_length)
 
-        for type_variant in make_valid_datasource_types(bad_data):
+        for type_variant in make_valid_bytestrings(bad_data):
             with pytest.raises(ValueError):
                 block = Block()
                 block.data = type_variant
