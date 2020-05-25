@@ -35,9 +35,9 @@ from typing import ByteString, Union
 from struct import Struct
 from itertools import chain
 
-from prayer.common import valid_bytestring
+from prayer.common import valid_bytestring, coerce_encoding
 
-MAX_BLOCK_NAME_LENGTH = 128
+MAX_BLOCK_NAME_LENGTH = 127
 DEFAULT_ENCODING = 'cp1252'
 
 
@@ -221,23 +221,10 @@ class Block:
                 f"Name must be set to a str, not a {type(value)}"
             )
 
-        # This is more informative than the previous behavior of breaking
-        # at write time, but it's bad. Maybe keep both an encoded and
-        # string version around? Revisit in encoding fix ticket?
-        try:
-            encoded_value = bytes(value, DEFAULT_ENCODING)
-        except UnicodeEncodeError as e:
-            raise ValueError(
-                "Name must only contain characters that "
-                "can be encoded in Windows-1252/CP-1252."
-            ) from e
-
-        # raise if it doesn't fit in a 128-byte null terminated string
-        if len(encoded_value) >= MAX_BLOCK_NAME_LENGTH:
-            raise ValueError(
-                "Name must be encodeable to 127 Windows-1252/CP-1252 "
-                "characters or less."
-            )
+        # Dirty, the return value is discarded and errors are
+        # raised if there's a problem. Really should keep around
+        # two versions of each string somehow.
+        coerce_encoding(value, MAX_BLOCK_NAME_LENGTH)
         self._name = value
 
     @property
