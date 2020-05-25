@@ -169,6 +169,19 @@ class Block:
                 self.body = body
 
     @property
+    def prefix_mutable(self) -> bool:
+        """
+        Whether the current instance is allowed to alter its prefix.
+
+        False for anything that isn't a base Block or TagBlock.
+
+        :return: whether prefix is a mutable property
+        """
+        # it's important to use the current class and
+        # not an instanceof call for this.
+        return self.__class__ in INSTANCES_CAN_CHANGE_PREFIX
+
+    @property
     def prefix(self) -> str:
         return self._prefix
 
@@ -187,9 +200,7 @@ class Block:
         :return:
         """
 
-        # it's important to use the current class and
-        # not an instanceof call for this.
-        if self.__class__ not in INSTANCES_CAN_CHANGE_PREFIX:
+        if not self.prefix_mutable :
             raise TypeError(
                 "Can only change the prefix on generic Blocks and "
                 "TagBlocks not their subclasses."
@@ -310,7 +321,16 @@ class Block:
             BLOCK_HEADER_STRUCT.unpack_from(data)
         )
 
-        self._prefix = raw_header.prefix
+        # Error if trying to create a non-generic block from
+        # a mismatched prefix.
+        if raw_header.prefix != self._prefix:
+            if not self.prefix_mutable:
+                raise TypeError(
+                    f"Prefix {raw_header.prefix} is not allowed for "
+                    f"blocks of type {type(self)}"
+                )
+            self._prefix = raw_header.prefix
+
         self.name = raw_header.name.decode("latin-1").rstrip("\0")
         self._expected_length = raw_header.length
         self._expected_length_decompressed = raw_header.length_decompressed

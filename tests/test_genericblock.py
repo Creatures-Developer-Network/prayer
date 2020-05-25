@@ -63,7 +63,7 @@ class DerivedBlock(Block):
     """
 
     # replaces "NONE" that generic blocks have
-    default_prefix: bytes = "TEST"
+    default_prefix: bytes = b"TEST"
 
     def _read_body(self, body_source: memoryview) -> None:
         """
@@ -322,6 +322,22 @@ class TestDataSetterAlone:
             with pytest.raises(ValueError):
                 block = Block()
                 block.data = type_variant
+
+    def test_typerror_when_wrong_prefix_in_header(self):
+        data = bytearray(144)
+        BLOCK_HEADER_STRUCT.pack_into(
+            data, 0,
+            b"ERR\0",
+            b"The previous heading won't match DerivedBlock",
+            50, 50,
+            0
+        )
+        data.extend(b"a" * 50)
+
+        b = DerivedBlock()
+        with pytest.raises(TypeError):
+            b.data = data
+
 
 class TestBodySetterIntegrationWithDataGetters:
 
