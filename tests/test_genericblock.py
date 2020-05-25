@@ -24,7 +24,7 @@ class DerivedBlock(Block):
     inherited, but the block prefix and body I/O are type-dependent.
 
     Ideally, you should only need to override:
-    * default_type_string, a class-level variable storing the block prefix
+    * default_prefix, a class-level variable storing the block prefix
     * _read_body(self, source: ByteString) -> None
     * _write_body(self, compress_data: bool = False) -> None
 
@@ -63,7 +63,7 @@ class DerivedBlock(Block):
     """
 
     # replaces "NONE" that generic blocks have
-    default_type_string: str = "TEST"
+    default_prefix: bytes = "TEST"
 
     def _read_body(self, body_source: memoryview) -> None:
         """
@@ -109,7 +109,7 @@ class TestTypeSetter:
         b = Block()
         with pytest.raises(ValueError):
             b.prefix = bad_string
-        assert b.prefix == "NONE"
+        assert b.prefix == b"NONE"
 
     @pytest.mark.parametrize("valid", ("fake", "four"))
     def test_setter_sets_type_for_valid_values(self, valid):
@@ -182,7 +182,7 @@ def make_valid_datasource_types(
             yield t(bytes_like)
 
 # helpers useful for testing the block setters
-VALID_SOURCE_DATATYPE_SAMPLES = make_valid_datasource_types(b"test")
+VALID_SOURCE_DATATYPE_SAMPLES = tuple(make_valid_datasource_types(b"test"))
 BAD_SOURCE_DATATYPE_SAMPLES = (
     "string",
     1,
@@ -240,7 +240,7 @@ class TestDataSetterAlone:
 
         b = Block()
         b.data = data
-        assert b.prefix == "NONE"
+        assert b.prefix == b"NONE"
         assert b.name == "test_name"
         assert b.body == final_body
 

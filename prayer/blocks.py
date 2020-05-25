@@ -99,7 +99,7 @@ class Block:
     """
 
     # override this in subclasses
-    default_type_string: str = "NONE"
+    default_prefix: bytes = b"NONE"
 
     def __init__(
             self,
@@ -137,7 +137,7 @@ class Block:
         """
 
         # set prefix to the class string value.
-        self._prefix: str = self.default_type_string
+        self._prefix: str = self.default_prefix
 
 
         self.name = ""
@@ -323,7 +323,7 @@ class Block:
             BLOCK_HEADER_STRUCT.unpack_from(data)
         )
 
-        self._prefix = raw_header.prefix.decode("latin-1")
+        self._prefix = raw_header.prefix
         self.name = raw_header.name.decode("latin-1").rstrip("\0")
         self._expected_length = raw_header.length
         self._expected_length_decompressed = raw_header.length_decompressed
@@ -366,7 +366,7 @@ class Block:
 
         BLOCK_HEADER_STRUCT.pack_into(
             self._header_cache, 0,
-            bytes(self.prefix, encoding="latin-1"),
+            self.prefix,
             bytes(self.name, encoding="latin-1").ljust(128, b"\0"),
             len(data_block),
             uncompressed_length,
@@ -472,7 +472,7 @@ class TagBlock(Block):
 
     # note this isn't an actual valid prefix, and should be overridden
     # by subclasses, as with the "NONE" prefix the base Block class uses.
-    default_type_string: str = "TAGS"
+    default_prefix: bytes = b"TAGS"
 
     def __init__(
             self,
