@@ -31,10 +31,11 @@ handles this through inheritance of a baseclass.
 """
 import zlib
 from collections import MutableSequence, namedtuple
-from typing import ByteString, Any, Union
+from typing import ByteString, Union
 from struct import Struct
 from itertools import chain
 
+from prayer.common import valid_bytestring
 
 MAX_BLOCK_NAME_LENGTH = 128
 DEFAULT_ENCODING = 'cp1252'
@@ -63,24 +64,6 @@ BlockHeaderTuple = namedtuple(
         "compressed"
     )
 )
-
-
-# a hack for type checking behavior that seems contrary to the docs, but
-# that may only be because I don't understand the typing module correctly.
-def valid_data_source(src: Any) -> bool:
-    """
-    Validate the data source as something a block can read from.
-
-    This may be the incorrect way of handling this. The doc for the typing
-    module states that ByteString should match bytes, bytearray, and
-    memoryview, and that the bytes prefix should match those as well.
-
-    However, ByteString only works with bytes and bytearray builtins.
-
-    :param src: an object to be checked
-    :return:
-    """
-    return isinstance(src, ByteString) or isinstance(src, memoryview)
 
 
 # track which Block classes are generics allowed to change their prefix
@@ -155,6 +138,7 @@ class Block:
 
         # set prefix to the class string value.
         self._prefix: str = self.default_type_string
+
 
         self.name = ""
         if name is not None:
@@ -284,7 +268,7 @@ class Block:
         :param body: a bytestring to be the source of the body
         :return: None
         """
-        if not valid_data_source(body):
+        if not valid_bytestring(body):
             raise TypeError(
                 "body must be a bytes, bytearray, or memoryview"
             )
