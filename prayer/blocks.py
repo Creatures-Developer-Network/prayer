@@ -30,9 +30,10 @@ handles this through inheritance of a baseclass.
 """
 import zlib
 from collections import MutableSequence, namedtuple
-from typing import ByteString, Union
-from struct import Struct
+from io import BytesIO, RawIOBase
 from itertools import chain
+from struct import Struct
+from typing import ByteString, Union, Iterable, Tuple, Callable
 
 from prayer.common import valid_bytestring, coerce_encoding
 
@@ -474,7 +475,72 @@ class Block:
 
 INSTANCES_CAN_CHANGE_PREFIX.add(Block)
 
+
+def _read_uint32(src_stream: RawIOBase) -> int:
+    """
+    Read a UInt32 from a stream and return it
+
+    :param src_stream:
+    :return:
+    """
+    return int.from_bytes(src_stream.read(4), byteorder="little")
+
+
+def _read_prefixed_string(
+        src_stream: RawIOBase,
+        encoding=DEFAULT_ENCODING
+) -> str:
+    """
+    Read a length-prefixed string from a stream and return it
+
+    :param src_stream: the stream to read from
+    :param encoding: what encoding to decode the string bytes with
+    :return:
+    """
+    num_bytes_to_read = _read_uint32(src_stream)
+    string = src_stream.read(num_bytes_to_read).decode()
+    return string
+
+
+def _write_uint32(out_stream, i: int) -> None:
+    """
+    Write an int to the passed stream
+
+    :param out_stream: stream to write to
+    :param i:
+    :return:
+    """
+    out_stream.write(i.to_bytes(4, "little"))
+
+
+def _write_prefixed_string(
+    out_stream,
+    s: str
+) -> None:
+    """
+    Encode a passed string, prefix it with length, write both to stream
+
+    :param out_stream: where to write to
+    :param s: string to encode
+    :return:
+    """
+    encoded = s.encode(DEFAULT_ENCODING)
+    _write_uint32(out_stream, len(encoded))
+    out_stream.write(encoded)
+
+
 class TagBlock(Block):
+    """
+
+    Read/write string and integer variables.
+
+    Demonstrates how much cleaner the code can be by using streams and
+    inheritance to handle location counting for you.
+
+    It's still inefficient as it doesn't cache values properly, but that
+    is assumed to be a target for a future ticket.
+
+    """
 
     # note this isn't an actual valid prefix, and should be overridden
     # by subclasses, as with the "NONE" prefix the base Block class uses.
@@ -485,10 +551,13 @@ class TagBlock(Block):
             name: str = None,
             compressed: Union[bool, int] = True,
             body: ByteString = None,
-            data: ByteString = None
+            data: ByteString = None,
+            named_variables: Iterable[Tuple[str, Union[int, str]]] = None,
     ):
         """
         Construct a base TagBlock. Mirrors the keywords on Block.
+
+        if neither body or data fields are defined, named_variables
 
         :param name:
         :param compressed:
@@ -502,32 +571,83 @@ class TagBlock(Block):
             data=data
         )
 
+        # This approach is still incorrect imo. Implementing a
+        # MutableMapping subclass could be better if we don't need to
+        # support repeated tag names. Int and string tags with the same
+        # name could still be supported fairly easily internally if there
+        # are separate internal ints and strings dicts, and would give us
+        # free length prefixing without having to separate out ints and
+        # strings from the list each time want to write the tag.
+        self.named_variables = []
 
-    @staticmethod
-    def create_tag_block(block_type, block_name, named_variables) -> None:
-        tmp_tag_block = TagBlock(Block().data)
-        tmp_tag_block.prefix = block_type
-        tmp_tag_block.name = block_name
-        tmp_tag_block.number_of_integer_variables = 0
-        tmp_tag_block.number_of_string_varaibles = 0
-        for variable in named_variables:
-            if type(variable[1] == int):
-                number_of_integer_variables = +1
-                tmp_tag_block.named_variables.append(variable)
-            elif type(variable[1 == str]):
-                number_of_string_varaibles = +1
-                tmp_tag_block.named_variables.append(variable)
-        return tmp_tag_block
+        if not self.body and not self.data:
+            if not isinstance(named_variables, Iterable):
+                raise TypeError(
+                    "named_variables must be an iterable"
+                )
 
-        raise NotImplementedError
+            for i, k, v in enumerate(named_variables):
+                if not isinstance(k, str):
+                    raise TypeError(
+                        f"All keys must be strings, "
+                        f"but got ({k}, {v}) at index {i}"
+                    )
+                elif not (isinstance(v, str) and isinstance(v, int)):
+                    raise TypeError(
+                        f"All values must be ints or strings, "
+                        f"but got ({k}, {v}) at index {i}"
+                    )
 
-    def _get_named_integer_variables(self, data, count):
+                self.named_variables.append((k, v))
+
+
+    def _read_variable_type(
+            self,
+            src: RawIOBase,
+            value_reader: Callable
+    ) -> None:
+        """
+        Read a block of (string, datatype) pairs from the passed stream.
+
+        Using a stream does the location arithmetic for you. No slicing
+        needs to be done manually.
+
+        The datatype is specified by the value_reader function at the
+        moment. This will be hopefully be clearly annotated in future
+        revisions using the TypeVar functionality in python's typing
+        module.
+
+        :param src: the stream to read from
+        :param value_reader: a function that will take care of reading
+        :return: nothing, appends to internal variable set
         """
 
-        :param data:
-        :param count:
+        num_to_read = _read_uint32(src)
+
+        for i in range(0, num_to_read):
+
+            name = _read_prefixed_string(src)
+            data = value_reader(src)
+
+            self.named_variables.append((name, data))
+
+    def _read_body(self) -> None:
+        """
+        Read the tags from stream.
+
+        Overrides the empty _read_body method in the baseclass, called by
+        the data property through _read_block.
+
         :return:
         """
+
+        # This is kind of ugly. should rework internal methods to use
+        # streams by default in another ticket so we get friendly io for
+        # free? It would allow socketserver.StreamRequestHandler to be
+        # used and a lot of code to be cleaned up to avoid manually
+        # slicing everything.
+        src = BytesIO(self._body_cache)
+
         #
         # Each named Integer Variable consists of 3 Parts:
         # - a 32bit Integer Variable that states the length of the name 'key_length'
@@ -537,20 +657,7 @@ class TagBlock(Block):
         # | 4B  Int len(KEY) | nB KEY in LATIN-1 | 4B Int Value |
         # +------------------+-------------------+--------------+
         #
-        if count != 0:
-            key_length = int.from_bytes(data[:4], byteorder="little")
-            key = data[4 : 4 + key_length].decode("latin-1")
-            value = int.from_bytes(
-                data[4 + key_length : 8 + key_length], byteorder="little"
-            )
-            self.named_variables.append((key, value))
-            self._get_named_integer_variables(
-                data=data[8 + key_length :], count=count - 1
-            )
-        else:
-            self.str_data = data
-
-    def _get_named_string_variables(self, data, count):
+        self._read_variable_type(src, _read_uint32)
         #
         # Each named String Variable consists of 4 Parts:
         # - a 32bit Integer Variable that states the length of the name 'key_length'
@@ -561,75 +668,73 @@ class TagBlock(Block):
         # | 4B Int len(KEY) | nB KEY in LATIN-1 | 4B Int len(Value) | nB Value in LATIN-1 |
         # +-----------------+-------------------+-------------------+---------------------+
         #
-        if count != 0:
-            key_length = int.from_bytes(data[:4], byteorder="little")
-            key = data[4 : 4 + key_length].decode("latin-1")
-            value_length = int.from_bytes(
-                data[4 + key_length : 8 + key_length], byteorder="little"
-            )
-            value = data[8 + key_length : 8 + key_length + value_length].decode(
-                "latin-1"
-            )
-            self.named_variables.append((key, value))
-            self._get_named_string_variables(
-                data=data[8 + key_length + value_length :], count=count - 1
-            )
-        else:
-            self.str_data = data
+        self._read_variable_type(src, _read_prefixed_string)
 
-    @property
-    def data(self) -> ByteString:
-        # if self.named_variables.data_changed:
-        if True:
-            ints = list()
-            strings = list()
-            for variable in self.named_variables:
-                if type(variable[1]) == int:
-                    ints.append(variable)
-                elif type(variable[1] == str):
-                    strings.append(variable)
-            tmp_ints = bytes(len(ints).to_bytes(length=4, byteorder="little"))
-            for variable in ints:
-                tmp_ints += len(bytes(variable[0], encoding="latin-1")).to_bytes(
-                    length=4, byteorder="little"
-                )
-                tmp_ints += bytes(variable[0], encoding="latin-1")
-                tmp_ints += variable[1].to_bytes(length=4, byteorder="little")
-            tmp_strings = bytes(len(strings).to_bytes(length=4, byteorder="little"))
-            for variable in strings:
-                tmp_strings += len(bytes(variable[0], encoding="latin-1")).to_bytes(
-                    length=4, byteorder="little"
-                )
-                tmp_strings += bytes(variable[0], encoding="latin-1")
-                tmp_strings += len(bytes(variable[1], encoding="latin-1")).to_bytes(
-                    length=4, byteorder="little"
-                )
-                tmp_strings += bytes(variable[1], encoding="latin-1")
-            self._data = tmp_ints + tmp_strings
-            # self.named_variables.data_changed = False
-        return self._data
+    def _write_variable_type(
+            self,
+            dest_stream,  # not sure how to type this yet
+            value_writer: Callable,
+            src  # ditto here, pycharm complains that using Sized is better here.
+    ) -> None:
+        """
+        Write the passed iterable to passed stream using the passed writer
 
-    @data.setter
-    def data(self, data: ByteString):
-        self._data = data
-        self.named_variables = list()
-        # Integers
-        self.number_of_integer_variables = int.from_bytes(data[:4], byteorder="little")
-        self._get_named_integer_variables(
-            data=data[4:], count=self.number_of_integer_variables
-        )
-        # Strings
-        self.number_of_string_varaibles = int.from_bytes(
-            self.str_data[:4], byteorder="little"
-        )
-        self._get_named_string_variables(
-            data=self.str_data[4:], count=self.number_of_string_varaibles
-        )
+        :param dest_stream:
+        :param value_writer: 
+        :return: 
+        """
+
+        _write_uint32(len(src))
+
+        for name, value in src:
+            _write_prefixed_string(dest_stream, name)
+            value_writer(dest_stream, value)
+
+    # compress_data probably shouldn't be passed at the moment, but fixing
+    # that is out of the scope of this commit.
+    def _write_body(self, compress_data: bool = True) -> None:
+        """
+        Write the body to internal _bytes_cache.
+
+        Overrides the empty write_body method in Block, called by
+        _write_body whenever a data property access is made.
+
+        This is inefficient, but is meant to be temporary and fixable in
+        the baseclass.
+
+        :param compress_data: whether to compress the data.
+        :return:
+        """
+
+        # write to a stream for easier record keeping
+        dest = BytesIO()
+
+        ints = list()
+        strings = list()
+
+        for key, value in self.named_variables:
+            if type(value) is int:
+                ints.append(value)
+            elif type(value) is str:
+                strings.append(value)
+            else:
+                #  this should be handled on add/append attempt instead
+                raise ValueError(
+                    f"Expected string or int values but got {value}"
+                )
+
+        self._write_variable_type(ints, _write_uint32)
+        self._write_variable_type(strings, _write_prefixed_string)
+
+        self._body_cache.extend(dest.getvalue())
 
 
 INSTANCES_CAN_CHANGE_PREFIX.add(TagBlock)
 
 
+# This behavior might be better placed on TagBlock class itself. Nothing
+# uses it right now, neither in this library or Rebabel, but i'm not
+# deleting it right away until there is some discussion around it.
 class TagBlockVariableList(MutableSequence):
     """
 
